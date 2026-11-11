@@ -1,0 +1,161 @@
+{% extends 'screening/base.html' %}
+{% load static %}
+{% block title %}AI Interview – TalentBot{% endblock %}
+{% block content %}
+<div class="landing-wrap">
+  <div class="landing-left">
+    <div class="l-badge">
+      <span class="live-dot"></span> AI-Powered Interview
+    </div>
+    <h1>Meet Your AI<br><span class="grad-text">HR Interviewer</span></h1>
+    <p class="l-desc">Experience a fully conversational job screening — guided by a live AI avatar. No forms. No confusion. Just a natural interview.</p>
+    <div class="l-features">
+      <div class="lf"><div class="lf-icon">🎥</div><div><strong>Live Avatar</strong><br><span>Real-time HR video presence</span></div></div>
+      <div class="lf"><div class="lf-icon">🧠</div><div><strong>Smart Branching</strong><br><span>Questions adapt to your answers</span></div></div>
+      <div class="lf"><div class="lf-icon">⚡</div><div><strong>3–5 Minutes</strong><br><span>Structured, fast, complete</span></div></div>
+    </div>
+    <div class="lang-selector-container">
+      <div class="lang-label">Choose Interview Language / ഭാഷ തിരഞ്ഞെടുക്കുക</div>
+      <div class="lang-grid">
+        <button class="lang-btn active" data-lang="en">
+          <span class="lang-dot en-dot"></span> English
+        </button>
+        <button class="lang-btn" data-lang="ml">
+          <span class="lang-dot ml-dot"></span> മലയാളം
+        </button>
+        <button class="lang-btn" data-lang="hi">
+          <span class="lang-dot hi-dot"></span> हिन्दी
+        </button>
+        <button class="lang-btn" data-lang="ta">
+          <span class="lang-dot ta-dot"></span> தமிழ்
+        </button>
+        <button class="lang-btn" data-lang="te">
+          <span class="lang-dot te-dot"></span> తెలుగు
+        </button>
+      </div>
+    </div>
+
+    <a href="{% url 'interview' %}" class="btn-start" id="beginBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Begin Interview
+    </a>
+    <p class="l-note">By continuing, you agree to our screening process terms.</p>
+  </div>
+  <div class="landing-right">
+    <div class="avatar-preview">
+      <div class="ap-glow"></div>
+      <div class="ap-screen">
+        <div class="ap-label"><span class="live-dot"></span> LIVE AI INTERVIEWER</div>
+        <div class="ap-avatar">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="60" r="60" fill="#0f1117"/>
+            <circle cx="60" cy="45" r="22" fill="#1D9E75" opacity=".15"/>
+            <circle cx="60" cy="45" r="16" fill="#1D9E75" opacity=".3"/>
+            <circle cx="60" cy="44" r="10" fill="#1D9E75"/>
+            <ellipse cx="60" cy="90" rx="28" ry="18" fill="#1D9E75" opacity=".2"/>
+            <ellipse cx="60" cy="88" rx="22" ry="14" fill="#1D9E75" opacity=".35"/>
+          </svg>
+        </div>
+        <div class="ap-wave">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="ap-caption">Initialising interview session...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% block extra_css %}
+<style>
+.lang-selector-container {
+  margin: 1.5rem 0 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.lang-label {
+  font-size: 0.75rem;
+  color: #535f72;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.lang-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.lang-btn {
+  background: rgba(19, 24, 42, 0.6);
+  border: 1.5px solid #1e2535;
+  color: #c8cdd9;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: inherit;
+  backdrop-filter: blur(4px);
+}
+.lang-btn:hover {
+  border-color: #534AB7;
+  color: #9b86f8;
+  background: rgba(83, 74, 183, 0.08);
+  transform: translateY(-1px);
+}
+.lang-btn.active {
+  border-color: #1D9E75;
+  color: #ffffff;
+  background: rgba(29, 158, 117, 0.15);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(29, 158, 117, 0.15);
+}
+.lang-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #c8cdd9;
+  display: inline-block;
+  transition: background-color 0.2s;
+}
+.lang-btn.active .lang-dot {
+  background: #5dcaa5;
+  box-shadow: 0 0 6px #5dcaa5;
+}
+.en-dot { background: #3498db; }
+.ml-dot { background: #e67e22; }
+.hi-dot { background: #e74c3c; }
+.ta-dot { background: #9b59b6; }
+.te-dot { background: #2ecc71; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const buttons = document.querySelectorAll('.lang-btn');
+  const beginBtn = document.getElementById('beginBtn');
+  let baseUrl = beginBtn.getAttribute('href') || '/interview/';
+  if (baseUrl.includes('?')) {
+    baseUrl = baseUrl.split('?')[0];
+  }
+  
+  // Set initial default href
+  beginBtn.setAttribute('href', baseUrl + '?lang=en');
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      buttons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const lang = btn.getAttribute('data-lang');
+      beginBtn.setAttribute('href', baseUrl + '?lang=' + lang);
+    });
+  });
+});
+</script>
+{% endblock %}
+{% endblock %}

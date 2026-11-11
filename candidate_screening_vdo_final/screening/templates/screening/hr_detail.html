@@ -1,0 +1,54 @@
+{% extends 'screening/base.html' %}
+{% block title %}{{ profile.user.get_full_name }} – HR Detail{% endblock %}
+{% block content %}
+<div class="detail-wrap">
+  <a href="{% url 'admin_panel' %}" class="back-link">← Back to Admin Panel</a>
+  <div class="hr-detail-card">
+    <div class="hd-header">
+      <div class="hd-av">{{ profile.user.first_name|first|upper }}{{ profile.user.last_name|first|upper }}</div>
+      <div class="hd-info">
+        <h1>{{ profile.user.get_full_name }}</h1>
+        <p>{{ profile.designation }} · {{ profile.department }}</p>
+        <span class="status-pill pill-{{ profile.approval_status }}">
+          {% if profile.approval_status == 'pending' %}⏳ Pending
+          {% elif profile.approval_status == 'approved' %}✅ Approved
+          {% else %}❌ Rejected{% endif %}
+        </span>
+      </div>
+      <a href="{% url 'hr_approval_action' profile.pk %}" class="btn-action">
+        {% if profile.approval_status == 'pending' %}Review Account{% else %}Re-evaluate{% endif %}
+      </a>
+    </div>
+    <div class="hd-body">
+      <div class="hd-section">
+        <h3>Account Details</h3>
+        <div class="hd-rows">
+          <div class="hd-row"><span>Full Name</span><strong>{{ profile.user.get_full_name }}</strong></div>
+          <div class="hd-row"><span>Email</span><strong>{{ profile.user.email }}</strong></div>
+          <div class="hd-row"><span>Username</span><strong>{{ profile.user.username }}</strong></div>
+          <div class="hd-row"><span>Phone</span><strong>{{ profile.phone|default:"—" }}</strong></div>
+          <div class="hd-row"><span>Employee ID</span><strong>{{ profile.employee_id|default:"—" }}</strong></div>
+          <div class="hd-row"><span>Department</span><strong>{{ profile.department }}</strong></div>
+          <div class="hd-row"><span>Designation</span><strong>{{ profile.designation }}</strong></div>
+        </div>
+      </div>
+      <div class="hd-section">
+        <h3>Approval History</h3>
+        <div class="hd-rows">
+          <div class="hd-row"><span>Current Status</span>
+            <span class="status-pill pill-{{ profile.approval_status }}">{{ profile.get_approval_status_display }}</span>
+          </div>
+          <div class="hd-row"><span>Registered On</span><strong>{{ profile.created_at|date:"d M Y, H:i" }}</strong></div>
+          {% if profile.approved_by %}
+          <div class="hd-row"><span>Reviewed By</span><strong>{{ profile.approved_by.get_full_name }}</strong></div>
+          <div class="hd-row"><span>Reviewed On</span><strong>{{ profile.approved_at|date:"d M Y, H:i" }}</strong></div>
+          {% endif %}
+          {% if profile.rejection_reason %}
+          <div class="hd-row hd-full"><span>Rejection Reason</span><div class="reason-text">{{ profile.rejection_reason }}</div></div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

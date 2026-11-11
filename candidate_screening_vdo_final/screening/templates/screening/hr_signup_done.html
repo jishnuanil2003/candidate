@@ -1,0 +1,20 @@
+{% extends 'screening/base.html' %}
+{% block title %}Request Submitted – TalentBot{% endblock %}
+{% block content %}
+<div class="auth-page">
+  <div class="auth-card" style="text-align:center">
+    <div class="done-icon">
+      <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="36" stroke="#1D9E75" stroke-width="3"/><polyline points="24,40 35,51 56,29" stroke="#1D9E75" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h2>Request Submitted!</h2>
+    <p>Thank you, <strong>{{ name }}</strong>. Your HR access request has been received.</p>
+    <div class="done-steps">
+      <div class="ds-item ds-done"><span>1</span> Account created</div>
+      <div class="ds-item ds-pending"><span>2</span> Admin review (1–2 business days)</div>
+      <div class="ds-item ds-pending"><span>3</span> Email notification sent</div>
+      <div class="ds-item ds-pending"><span>4</span> Access to dashboard</div>
+    </div>
+    <a href="{% url 'hr_login' %}" class="auth-btn" style="display:inline-block;text-decoration:none;margin-top:1rem">Go to Login</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,471 @@
+{% extends 'screening/base.html' %}
+{% load static %}
+{% block title %}Admin Control Panel – TalentBot{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ─── Admin Panel Layout ─────────────────────────────────────────── */
+.ap-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  display: grid;
+  gap: 1.75rem;
+}
+
+/* Hero Header */
+.ap-hero {
+  background: linear-gradient(135deg, #0e1220 0%, #13182a 50%, #0d1b17 100%);
+  border: 1px solid #1e2535;
+  border-radius: 16px;
+  padding: 2rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+.ap-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, rgba(29,158,117,.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.ap-hero-left { display: flex; align-items: center; gap: 1.25rem; }
+.ap-hero-icon {
+  width: 54px; height: 54px;
+  background: rgba(29,158,117,.15);
+  border: 1px solid rgba(29,158,117,.3);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ap-hero-icon svg { width: 26px; height: 26px; stroke: #5dcaa5; }
+.ap-hero-text h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+.ap-hero-text p  { font-size: 13.5px; color: #8892a4; margin: 0; }
+.ap-hero-actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+.ap-btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid #252d3d;
+  border-radius: 9px;
+  font-size: 13px; font-weight: 500;
+  color: #c8cdd9;
+  text-decoration: none;
+  transition: all .2s;
+}
+.ap-btn-ghost:hover { border-color: #5dcaa5; color: #5dcaa5; background: rgba(29,158,117,.06); }
+.ap-btn-ghost svg { width: 14px; height: 14px; }
+
+/* Flash messages */
+.ap-flash { padding: 12px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.ap-flash-success { background: rgba(29,158,117,.12); color: #5dcaa5; border: 1px solid rgba(29,158,117,.25); }
+.ap-flash-warning { background: rgba(230,165,53,.12); color: #e6a535; border: 1px solid rgba(230,165,53,.25); }
+
+/* Stat Cards */
+.ap-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+@media (max-width: 768px) { .ap-stats { grid-template-columns: repeat(2, 1fr); } }
+.ap-stat {
+  background: #13182a;
+  border: 1px solid #1e2535;
+  border-radius: 14px;
+  padding: 1.5rem 1.25rem;
+  display: flex; align-items: center; gap: 1rem;
+  transition: border-color .2s, transform .2s;
+  cursor: default;
+}
+.ap-stat:hover { transform: translateY(-2px); }
+.ap-stat-total:hover  { border-color: rgba(83,74,183,.5); }
+.ap-stat-pending:hover { border-color: rgba(230,165,53,.5); }
+.ap-stat-approved:hover { border-color: rgba(29,158,117,.5); }
+.ap-stat-rejected:hover { border-color: rgba(192,57,43,.5); }
+.ap-stat-ic {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; flex-shrink: 0;
+}
+.ap-stat-total   .ap-stat-ic { background: rgba(83,74,183,.15); }
+.ap-stat-pending .ap-stat-ic { background: rgba(230,165,53,.15); }
+.ap-stat-approved .ap-stat-ic { background: rgba(29,158,117,.15); }
+.ap-stat-rejected .ap-stat-ic { background: rgba(192,57,43,.15); }
+.ap-stat-num { font-size: 2rem; font-weight: 700; line-height: 1; margin-bottom: 3px; }
+.ap-stat-total   .ap-stat-num { color: #9b86f8; }
+.ap-stat-pending .ap-stat-num { color: #e6a535; }
+.ap-stat-approved .ap-stat-num { color: #5dcaa5; }
+.ap-stat-rejected .ap-stat-num { color: #e05d4e; }
+.ap-stat-lbl { font-size: 12.5px; color: #8892a4; font-weight: 500; }
+
+/* Table section */
+.ap-section {
+  background: #13182a;
+  border: 1px solid #1e2535;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.ap-section-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #1e2535;
+  flex-wrap: wrap; gap: .75rem;
+}
+.ap-section-left { display: flex; align-items: center; gap: 1rem; }
+.ap-section-left h2 { font-size: 1.1rem; font-weight: 600; }
+.ap-pending-badge {
+  background: rgba(230,165,53,.15);
+  color: #e6a535;
+  font-size: 11.5px; font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(230,165,53,.2);
+}
+.ap-filter-form { display: flex; align-items: center; gap: .75rem; }
+.ap-filter-form select {
+  padding: 7px 12px;
+  background: #0e1220;
+  border: 1px solid #252d3d;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #c8cdd9;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer; outline: none;
+}
+.ap-filter-form select:hover { border-color: #5dcaa5; }
+.ap-clear-lnk { font-size: 12.5px; color: #8892a4; text-decoration: none; }
+.ap-clear-lnk:hover { color: #e05d4e; }
+
+/* Bulk bar */
+.ap-bulk-bar {
+  display: none;
+  align-items: center; gap: 1rem;
+  padding: .85rem 1.5rem;
+  background: rgba(29,158,117,.06);
+  border-bottom: 1px solid rgba(29,158,117,.2);
+  animation: slidein .2s ease;
+}
+@keyframes slidein { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.ap-bulk-count { font-size: 13px; font-weight: 600; color: #5dcaa5; flex: 1; }
+.ap-bulk-btn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12.5px; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent;
+  font-family: inherit; transition: all .15s;
+}
+.ap-bulk-approve { background: rgba(29,158,117,.15); color: #5dcaa5; border-color: rgba(29,158,117,.3); }
+.ap-bulk-approve:hover { background: rgba(29,158,117,.28); }
+.ap-bulk-reject  { background: rgba(192,57,43,.15); color: #e05d4e; border-color: rgba(192,57,43,.3); }
+.ap-bulk-reject:hover  { background: rgba(192,57,43,.28); }
+
+/* Table */
+.ap-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ap-table thead tr { background: #0e1220; }
+.ap-table th {
+  padding: .9rem 1rem;
+  text-align: left;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  color: #535f72;
+  border-bottom: 1px solid #1e2535;
+}
+.ap-table td {
+  padding: .95rem 1rem;
+  border-bottom: 1px solid #1a2033;
+  vertical-align: middle;
+}
+.ap-table tbody tr:last-child td { border-bottom: none; }
+.ap-table tbody tr:hover td { background: rgba(255,255,255,.018); }
+.ap-row-pending td { background: rgba(230,165,53,.02); }
+.ap-row-pending:hover td { background: rgba(230,165,53,.04) !important; }
+
+/* Member cell */
+.ap-member-cell { display: flex; align-items: center; gap: .85rem; }
+.ap-av {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1D9E75, #534AB7);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(29,158,117,.2);
+}
+.ap-member-name { font-weight: 500; color: #e8eaf0; font-size: 13.5px; }
+.ap-member-email { font-size: 11.5px; color: #535f72; margin-top: 1px; }
+.ap-company { font-weight: 500; color: #c8cdd9; }
+.ap-role    { font-size: 12px; color: #535f72; margin-top: 2px; }
+.ap-phone   { font-size: 13px; color: #8892a4; }
+.ap-date    { font-size: 12.5px; color: #8892a4; }
+.ap-time    { font-size: 11px; color: #535f72; }
+.ap-reviewer { font-size: 13px; font-weight: 500; color: #c8cdd9; }
+
+/* Status pills */
+.ap-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  white-space: nowrap;
+}
+.ap-pill-pending  { background: rgba(230,165,53,.15); color: #e6a535; border: 1px solid rgba(230,165,53,.2); }
+.ap-pill-approved { background: rgba(29,158,117,.15); color: #5dcaa5; border: 1px solid rgba(29,158,117,.2); }
+.ap-pill-rejected { background: rgba(192,57,43,.15); color: #e05d4e; border: 1px solid rgba(192,57,43,.2); }
+
+/* Action buttons */
+.ap-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.ap-act {
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: 12px; font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: all .15s;
+}
+.ap-act-view   { background: #0e1220; color: #c8cdd9; border-color: #252d3d; }
+.ap-act-view:hover   { border-color: #8892a4; color: #e8eaf0; }
+.ap-act-review { background: rgba(29,158,117,.12); color: #5dcaa5; border-color: rgba(29,158,117,.25); }
+.ap-act-review:hover { background: rgba(29,158,117,.22); }
+.ap-act-revoke { background: rgba(192,57,43,.12); color: #e05d4e; border-color: rgba(192,57,43,.25); }
+.ap-act-revoke:hover { background: rgba(192,57,43,.22); }
+.ap-act-reevaluate { background: rgba(230,165,53,.12); color: #e6a535; border-color: rgba(230,165,53,.25); }
+.ap-act-reevaluate:hover { background: rgba(230,165,53,.22); }
+
+/* Checkbox */
+.ap-table input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: #1D9E75;
+  cursor: pointer;
+}
+
+/* Empty state */
+.ap-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+.ap-empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+.ap-empty h3 { font-size: 1.2rem; font-weight: 600; color: #e8eaf0; margin-bottom: .4rem; }
+.ap-empty p  { font-size: 14px; color: #535f72; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ap-wrap">
+
+  <!-- Hero Header -->
+  <div class="ap-hero">
+    <div class="ap-hero-left">
+      <div class="ap-hero-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div class="ap-hero-text">
+        <h1>Admin Control Panel</h1>
+        <p>Manage HR account registrations and approvals</p>
+      </div>
+    </div>
+    <div class="ap-hero-actions">
+      <a href="{% url 'dashboard' %}" class="ap-btn-ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Applications
+      </a>
+      <a href="/admin/" class="ap-btn-ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+        Django Admin
+      </a>
+    </div>
+  </div>
+
+  <!-- Flash Messages -->
+  {% if messages %}
+  <div style="display:grid;gap:.5rem;">
+    {% for msg in messages %}
+    <div class="ap-flash {% if 'success' in msg.tags %}ap-flash-success{% else %}ap-flash-warning{% endif %}">
+      {% if 'success' in msg.tags %}✅{% else %}⚠️{% endif %} {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="ap-stats">
+    <div class="ap-stat ap-stat-total">
+      <div class="ap-stat-ic">👥</div>
+      <div class="ap-stat-body">
+        <div class="ap-stat-num">{{ stats.total }}</div>
+        <div class="ap-stat-lbl">Total HR Accounts</div>
+      </div>
+    </div>
+    <div class="ap-stat ap-stat-pending">
+      <div class="ap-stat-ic">⏳</div>
+      <div class="ap-stat-body">
+        <div class="ap-stat-num">{{ stats.pending }}</div>
+        <div class="ap-stat-lbl">Pending Approval</div>
+      </div>
+    </div>
+    <div class="ap-stat ap-stat-approved">
+      <div class="ap-stat-ic">✅</div>
+      <div class="ap-stat-body">
+        <div class="ap-stat-num">{{ stats.approved }}</div>
+        <div class="ap-stat-lbl">Approved</div>
+      </div>
+    </div>
+    <div class="ap-stat ap-stat-rejected">
+      <div class="ap-stat-ic">❌</div>
+      <div class="ap-stat-body">
+        <div class="ap-stat-num">{{ stats.rejected }}</div>
+        <div class="ap-stat-lbl">Rejected</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table Section -->
+  <div class="ap-section">
+    <!-- Toolbar -->
+    <div class="ap-section-toolbar">
+      <div class="ap-section-left">
+        <h2>HR Accounts</h2>
+        {% if stats.pending > 0 %}
+        <span class="ap-pending-badge">{{ stats.pending }} awaiting review</span>
+        {% endif %}
+      </div>
+      <form method="GET" action="{% url 'admin_panel' %}" class="ap-filter-form">
+        <select name="status" onchange="this.form.submit()">
+          <option value="">All Statuses</option>
+          {% for val, label in statuses %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        {% if status_filter %}
+        <a href="{% url 'admin_panel' %}" class="ap-clear-lnk">✕ Clear</a>
+        {% endif %}
+      </form>
+    </div>
+
+    {% if hr_profiles %}
+    <form method="POST" action="{% url 'admin_panel' %}" id="bulkForm">
+      {% csrf_token %}
+
+      <!-- Bulk Bar (shown when items checked) -->
+      <div class="ap-bulk-bar" id="bulkBar">
+        <span class="ap-bulk-count" id="bulkCount">0 selected</span>
+        <button type="submit" name="bulk_action" value="approve" class="ap-bulk-btn ap-bulk-approve">✅ Approve Selected</button>
+        <button type="submit" name="bulk_action" value="reject"  class="ap-bulk-btn ap-bulk-reject">❌ Reject Selected</button>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="ap-table">
+          <thead>
+            <tr>
+              <th style="width:42px;"><input type="checkbox" id="selectAll" title="Select all"></th>
+              <th>HR Member</th>
+              <th>Company / Role</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Registered</th>
+              <th>Reviewed By</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for profile in hr_profiles %}
+            <tr class="{% if profile.approval_status == 'pending' %}ap-row-pending{% endif %}">
+              <td><input type="checkbox" name="selected_ids" value="{{ profile.pk }}" class="row-check"></td>
+              <td>
+                <div class="ap-member-cell">
+                  <div class="ap-av">{{ profile.user.first_name|first|upper }}{{ profile.user.last_name|first|upper }}</div>
+                  <div>
+                    <div class="ap-member-name">{{ profile.user.get_full_name|default:profile.user.username }}</div>
+                    <div class="ap-member-email">{{ profile.user.email }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="ap-company">{{ profile.company }}</div>
+                <div class="ap-role">{{ profile.designation }}</div>
+              </td>
+              <td><span class="ap-phone">{{ profile.phone|default:"—" }}</span></td>
+              <td>
+                <span class="ap-pill
+                  {% if profile.approval_status == 'pending' %}ap-pill-pending
+                  {% elif profile.approval_status == 'approved' %}ap-pill-approved
+                  {% else %}ap-pill-rejected{% endif %}">
+                  {% if profile.approval_status == 'pending' %}⏳ Pending
+                  {% elif profile.approval_status == 'approved' %}✅ Approved
+                  {% else %}❌ Rejected{% endif %}
+                </span>
+              </td>
+              <td>
+                <div class="ap-date">{{ profile.created_at|date:"d M Y" }}</div>
+                <div class="ap-time">{{ profile.created_at|date:"H:i" }}</div>
+              </td>
+              <td>
+                {% if profile.approved_by %}
+                <div class="ap-reviewer">{{ profile.approved_by.get_full_name }}</div>
+                <div class="ap-time">{{ profile.approved_at|date:"d M Y" }}</div>
+                {% else %}
+                <span class="ap-time">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="ap-actions">
+                  <a href="{% url 'hr_detail' profile.pk %}" class="ap-act ap-act-view">View</a>
+                  {% if profile.approval_status == 'pending' %}
+                  <a href="{% url 'hr_approval_action' profile.pk %}" class="ap-act ap-act-review">Review</a>
+                  {% elif profile.approval_status == 'rejected' %}
+                  <a href="{% url 'hr_approval_action' profile.pk %}" class="ap-act ap-act-reevaluate">Re-evaluate</a>
+                  {% else %}
+                  <a href="{% url 'hr_approval_action' profile.pk %}" class="ap-act ap-act-revoke">Revoke</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+
+    {% else %}
+    <div class="ap-empty">
+      <div class="ap-empty-icon">👥</div>
+      <h3>No HR Accounts Found</h3>
+      <p>{% if status_filter %}No accounts with this status. <a href="{% url 'admin_panel' %}" style="color:#5dcaa5;">Clear filter</a>{% else %}HR registrations will appear here once people sign up.{% endif %}</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+const selectAll = document.getElementById('selectAll');
+const bulkBar   = document.getElementById('bulkBar');
+const bulkCount = document.getElementById('bulkCount');
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  if (checked.length > 0) {
+    bulkBar.style.display = 'flex';
+    bulkCount.textContent = checked.length + ' account' + (checked.length > 1 ? 's' : '') + ' selected';
+  } else {
+    bulkBar.style.display = 'none';
+  }
+  if (selectAll) {
+    const all = document.querySelectorAll('.row-check');
+    selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+  }
+}
+
+if (selectAll) {
+  selectAll.addEventListener('change', () => {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = selectAll.checked);
+    updateBulkBar();
+  });
+}
+document.querySelectorAll('.row-check').forEach(cb => cb.addEventListener('change', updateBulkBar));
+</script>
+{% endblock %}

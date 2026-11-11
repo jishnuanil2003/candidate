@@ -1,0 +1,179 @@
+{% extends 'screening/base.html' %}
+{% load static %}
+{% block title %}Choose Interview Language – TalentBot{% endblock %}
+
+{% block extra_css %}
+<style>
+.navbar { display: none; }
+body {
+  background: #0b0f19;
+  color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  margin: 0;
+}
+.lang-card-wrap {
+  width: 100%;
+  max-width: 580px;
+  background: #121826;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 2.25rem 2rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.lang-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(83, 74, 183, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-bottom: 1.25rem;
+}
+.lang-title {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.25;
+}
+.lang-greeting {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  margin: 0 0 1.75rem 0;
+  line-height: 1.5;
+}
+.lang-greeting strong {
+  color: #f1f5f9;
+}
+.lang-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+@media (min-width: 480px) {
+  .lang-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .lang-grid .lang-btn:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}
+.lang-btn {
+  background: #182234;
+  border: 1.5px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 72px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: inherit;
+  width: 100%;
+}
+.lang-btn:hover {
+  background: #1e2b42;
+  border-color: #6366f1;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
+}
+.lang-btn:active {
+  transform: translateY(0);
+}
+.lang-native {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+.lang-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.lang-note {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lang-card-wrap">
+  <div class="lang-badge">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="14" height="14">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+    TalentBot Screening
+  </div>
+
+  <h1 class="lang-title">Choose Your Language</h1>
+  <p class="lang-greeting">
+    {% if candidate_name %}
+      Welcome, <strong>{{ candidate_name }}</strong>.
+    {% else %}
+      Welcome to your AI screening interview.
+    {% endif %}
+    Please select the language you prefer for your interview questions and video.
+  </p>
+
+  <form method="POST" action="{% url 'select_language' %}" id="langForm">
+    {% csrf_token %}
+    <div class="lang-grid">
+      <button type="submit" name="lang" value="en" class="lang-btn">
+        <span class="lang-native">English</span>
+        <span class="lang-sub">English</span>
+      </button>
+
+      <button type="submit" name="lang" value="ml" class="lang-btn">
+        <span class="lang-native">മലയാളം</span>
+        <span class="lang-sub">Malayalam</span>
+      </button>
+
+      <button type="submit" name="lang" value="hi" class="lang-btn">
+        <span class="lang-native">हिन्दी</span>
+        <span class="lang-sub">Hindi</span>
+      </button>
+
+      <button type="submit" name="lang" value="ta" class="lang-btn">
+        <span class="lang-native">தமிழ்</span>
+        <span class="lang-sub">Tamil</span>
+      </button>
+
+      <button type="submit" name="lang" value="te" class="lang-btn">
+        <span class="lang-native">తెలుగు</span>
+        <span class="lang-sub">Telugu</span>
+      </button>
+    </div>
+  </form>
+
+  <p class="lang-note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    You can change your language before submitting your first answer.
+  </p>
+</div>
+{% endblock %}

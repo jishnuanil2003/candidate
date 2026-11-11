@@ -1,0 +1,11 @@
+db.sqlite3
+.env
+.env.*
+!.env.example
+
+# Interview Media (large video binaries excluded from git; directory structure preserved via .gitkeep)
+interview_media/**/*.mp4
+interview_media/**/*.webm
+!interview_media/**/.gitkeep
+!interview_media/**/README.txt
+

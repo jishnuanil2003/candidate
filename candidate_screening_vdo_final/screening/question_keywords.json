@@ -1,0 +1,20 @@
+{
+  "full_name": ["full name", "first and last name", "candidate name"],
+  "email": ["email address", "email id", "email"],
+  "phone": ["phone number", "mobile number", "contact number", "telephone number"],
+  "applied_role": ["role applying for", "position applying for", "applied position", "role of interest", "applying for"],
+  "qualification": ["highest educational qualification", "highest qualification", "education level", "degree"],
+  "field_of_study": ["field of study", "area of study", "major", "specialization", "specialisation"],
+  "institution": ["college or university", "name of college", "educational institution", "university attended"],
+  "graduation_year": ["graduation year", "year of graduation", "year did you graduate", "graduate in which year"],
+  "cgpa": ["cgpa", "grade point average", "academic score", "percentage score", "percentage marks"],
+  "has_experience": ["prior work experience", "professional experience yes or no", "fresher or experienced", "years of experience"],
+  "company": ["current company", "most recent company", "company name", "employer name", "current employer"],
+  "previous_role": ["previous role", "current job title", "job title", "designation"],
+  "work_duration": ["total work experience", "duration of experience", "years worked", "how long did you work"],
+  "skills": ["technical skills", "programming skills", "key skills", "top skills", "technical skill set"],
+  "notice_period": ["notice period", "serving notice", "last working day", "how soon can you join", "joining availability", "immediate joiner"],
+  "expected_salary": {"keywords": ["expected salary", "expected compensation", "expected pay", "salary expectation", "compensation expectation", "expected ctc", "expected lpa", "desired salary", "desired compensation"], "requires_one_of": ["expected", "expectation", "desired"]},
+  "linkedin": ["linkedin profile", "linkedin url", "linkedin link", "linkedin address"],
+  "cover_note": ["why are you a good fit", "reason you are a good fit", "why should we hire you", "why are you suitable", "role fit"]
+}

@@ -1,0 +1,30 @@
+{% extends 'screening/base.html' %}
+{% block title %}Application Submitted – TalentBot{% endblock %}
+{% block content %}
+<div class="success-page">
+  <div class="success-card">
+    <div class="check-circle">
+      <svg viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="#1D9E75" stroke-width="3"/><polyline points="18,30 26,38 42,22" stroke="#1D9E75" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h1>Interview Complete!</h1>
+    <p>Thank you{% if application %}, <strong>{{ application.full_name }}</strong>{% endif %}! Your application has been received. Our team will review it and be in touch shortly.</p>
+    {% if application %}
+    <div class="confirm-details">
+      <div class="conf-row"><span>Role Applied</span><strong>{{ application.applied_role }}</strong></div>
+      <div class="conf-row"><span>Email</span><strong>{{ application.email }}</strong></div>
+      <div class="conf-row"><span>Application ID</span><strong>#{{ application.id }}</strong></div>
+      <div class="conf-row"><span>Status</span><span class="badge-green">{{ application.get_status_display }}</span></div>
+    </div>
+    {% endif %}
+    <div class="next-steps">
+      <h3>What happens next?</h3>
+      <ol>
+        <li>HR reviews your profile within 1–2 business days</li>
+        <li>Shortlisted candidates receive an email confirmation</li>
+        <li>Interview schedule sent via email</li>
+      </ol>
+    </div>
+    <a href="{% url 'index' %}" class="btn-primary">Back to Home</a>
+  </div>
+</div>
+{% endblock %}

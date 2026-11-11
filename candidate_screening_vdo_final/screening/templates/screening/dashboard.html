@@ -1,0 +1,62 @@
+{% extends 'screening/base.html' %}
+{% load static %}
+{% block title %}HR Dashboard – TalentBot{% endblock %}
+{% block content %}
+<div class="dashboard">
+  <div class="dash-header">
+    <div><h1>HR Dashboard</h1><p>Review and manage all candidate applications</p></div>
+    <a href="{% url 'index' %}" class="btn-outline">+ New Interview</a>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num">{{ stats.total }}</div><div class="stat-label">Total Applications</div></div>
+    <div class="stat-card stat-green"><div class="stat-num">{{ stats.completed }}</div><div class="stat-label">Completed</div></div>
+    <div class="stat-card stat-blue"><div class="stat-num">{{ stats.reviewed }}</div><div class="stat-label">Reviewed</div></div>
+    <div class="stat-card stat-purple"><div class="stat-num">{{ stats.shortlisted }}</div><div class="stat-label">Shortlisted</div></div>
+  </div>
+  <div class="filter-row">
+    <form method="GET" class="filter-form">
+      <select name="status" onchange="this.form.submit()">
+        <option value="">All Statuses</option>
+        {% for value, label in statuses %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="role" onchange="this.form.submit()">
+        <option value="">All Roles</option>
+        {% for role in roles %}<option value="{{ role }}" {% if role_filter == role %}selected{% endif %}>{{ role }}</option>{% endfor %}
+      </select>
+      {% if status_filter or role_filter %}<a href="{% url 'dashboard' %}" class="clear-btn">Clear</a>{% endif %}
+    </form>
+    <div class="result-count">{{ applications|length }} result{{ applications|length|pluralize }}</div>
+  </div>
+  {% if applications %}
+  <div class="app-table-wrap">
+    <table class="app-table">
+      <thead>
+        <tr><th>Candidate</th><th>Role</th><th>Qualification</th><th>Experience</th><th>Skills</th><th>Salary</th><th>Notice</th><th>Status</th><th>Date</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for app in applications %}
+        <tr>
+          <td><div class="cand-name">{{ app.full_name }}</div><div class="cand-email">{{ app.email }}</div></td>
+          <td><span class="role-tag">{{ app.applied_role }}</span></td>
+          <td style="font-size:12px;color:var(--text2)">{{ app.qualification }}<br>{{ app.institution|truncatechars:25 }}</td>
+          <td>{% if app.has_experience %}{{ app.work_duration }}{% else %}<span class="fresher-tag">Fresher</span>{% endif %}</td>
+          <td class="skills-cell">{% for s in app.get_skills_list|slice:":3" %}<span class="skill-chip">{{ s }}</span>{% endfor %}</td>
+          <td style="font-size:12px">{{ app.expected_salary }}</td>
+          <td style="font-size:12px">{{ app.notice_period }}</td>
+          <td><span class="status-badge status-{{ app.status }}">{{ app.get_status_display }}</span></td>
+          <td class="date-cell">{{ app.created_at|date:"d M Y" }}</td>
+          <td><a href="{% url 'application_detail' app.pk %}" class="view-btn">View →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🎙</div>
+    <h3>No applications yet</h3>
+    <p>Completed interviews will appear here.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends 'screening/base.html' %}
+{% block title %}{{ application.full_name }} – TalentBot{% endblock %}
+{% block content %}
+<div class="detail-page">
+  <div class="detail-header">
+    <a href="{% url 'dashboard' %}" class="back-link">← Back to Dashboard</a>
+    <div class="detail-title">
+      <div class="cand-avatar">{{ application.full_name|first }}</div>
+      <div><h1>{{ application.full_name }}</h1><p>{{ application.email }} · {{ application.phone }}</p></div>
+    </div>
+  </div>
+  <div class="detail-grid">
+    <div class="detail-main">
+      <div class="detail-section">
+        <h2>Personal Information</h2>
+        <div class="detail-rows">
+          <div class="dr"><span>Full Name</span><strong>{{ application.full_name }}</strong></div>
+          <div class="dr"><span>Email</span><strong>{{ application.email }}</strong></div>
+          <div class="dr"><span>Phone</span><strong>{{ application.phone }}</strong></div>
+          {% if application.linkedin %}<div class="dr"><span>LinkedIn</span><a href="{{ application.linkedin }}" target="_blank" class="link">{{ application.linkedin }}</a></div>{% endif %}
+        </div>
+      </div>
+      <div class="detail-section">
+        <h2>Education</h2>
+        <div class="detail-rows">
+          <div class="dr"><span>Qualification</span><strong>{{ application.qualification }}</strong></div>
+          <div class="dr"><span>Field of Study</span><strong>{{ application.field_of_study }}</strong></div>
+          <div class="dr"><span>Institution</span><strong>{{ application.institution }}</strong></div>
+          <div class="dr"><span>Graduation Year</span><strong>{{ application.graduation_year }}</strong></div>
+          <div class="dr"><span>CGPA / %</span><strong>{{ application.cgpa }}</strong></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h2>Application Details</h2>
+        <div class="detail-rows">
+          <div class="dr"><span>Applied Role</span><strong>{{ application.applied_role }}</strong></div>
+          <div class="dr"><span>Experience</span><strong>{% if application.has_experience %}Yes{% elif application.has_experience == False %}No (Fresher){% else %}N/A{% endif %}</strong></div>
+          {% if application.has_experience %}
+          <div class="dr"><span>Company</span><strong>{{ application.company }}</strong></div>
+          <div class="dr"><span>Previous Role</span><strong>{{ application.previous_role }}</strong></div>
+          <div class="dr"><span>Duration</span><strong>{{ application.work_duration }}</strong></div>
+          {% endif %}
+          <div class="dr"><span>Notice Period</span><strong>{{ application.notice_period }}</strong></div>
+          <div class="dr"><span>Expected Salary</span><strong>{{ application.expected_salary }}</strong></div>
+          <div class="dr"><span>Applied On</span><strong>{{ application.created_at|date:"d M Y, H:i" }}</strong></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h2>Technical Skills</h2>
+        <div class="skills-list">{% for skill in application.get_skills_list %}<span class="skill-chip-lg">{{ skill }}</span>{% endfor %}</div>
+      </div>
+      {% if application.cover_note %}
+      <div class="detail-section">
+        <h2>Cover Note</h2>
+        <div class="cover-note">{{ application.cover_note }}</div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="detail-sidebar">
+      <div class="status-card">
+        <h3>Application Status</h3>
+        <div class="current-status status-{{ application.status }}">{{ application.get_status_display }}</div>
+        <form method="POST">
+          {% csrf_token %}
+          <label>Update Status</label>
+          <select name="status">
+            {% for value, label in application.STATUS_CHOICES %}
+            <option value="{{ value }}" {% if application.status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn-update">Update Status</button>
+        </form>
+      </div>
+      <div class="quick-info">
+        <div class="qi-row"><span>Application ID</span><strong>#{{ application.id }}</strong></div>
+        <div class="qi-row"><span>Session</span><strong>{{ application.session_key|truncatechars:14 }}</strong></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

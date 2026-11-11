@@ -1,0 +1,94 @@
+{% extends 'screening/base.html' %}
+{% block title %}Review HR Account – TalentBot{% endblock %}
+{% block content %}
+<div class="approval-page">
+  <a href="{% url 'admin_panel' %}" class="back-link">← Back to Admin Panel</a>
+
+  <div class="approval-layout">
+    <!-- Profile Card -->
+    <div class="profile-card">
+      <div class="profile-header">
+        <div class="big-av">{{ profile.user.first_name|first|upper }}{{ profile.user.last_name|first|upper }}</div>
+        <div class="profile-name">{{ profile.user.get_full_name }}</div>
+        <div class="profile-email">{{ profile.user.email }}</div>
+        <span class="status-pill pill-{{ profile.approval_status }}">
+          {% if profile.approval_status == 'pending' %}⏳ Pending Review
+          {% elif profile.approval_status == 'approved' %}✅ Approved
+          {% else %}❌ Rejected{% endif %}
+        </span>
+      </div>
+      <div class="profile-details">
+        <div class="pd-row"><span>Department</span><strong>{{ profile.department }}</strong></div>
+        <div class="pd-row"><span>Designation</span><strong>{{ profile.designation }}</strong></div>
+        <div class="pd-row"><span>Employee ID</span><strong>{{ profile.employee_id|default:"—" }}</strong></div>
+        <div class="pd-row"><span>Phone</span><strong>{{ profile.phone|default:"—" }}</strong></div>
+        <div class="pd-row"><span>Username</span><strong>{{ profile.user.username }}</strong></div>
+        <div class="pd-row"><span>Registered</span><strong>{{ profile.created_at|date:"d M Y, H:i" }}</strong></div>
+        {% if profile.approved_by %}
+        <div class="pd-row"><span>Last Action By</span><strong>{{ profile.approved_by.get_full_name }}</strong></div>
+        <div class="pd-row"><span>Action Date</span><strong>{{ profile.approved_at|date:"d M Y, H:i" }}</strong></div>
+        {% endif %}
+        {% if profile.rejection_reason %}
+        <div class="pd-row pd-full"><span>Previous Reason</span><div class="reason-text">{{ profile.rejection_reason }}</div></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Action Card -->
+    <div class="action-card">
+      <h2>Make a Decision</h2>
+      <p>Review the HR member's details and choose an action. This will update their account access immediately.</p>
+
+      <form method="POST" class="approval-form" id="approvalForm">
+        {% csrf_token %}
+        <input type="hidden" name="action" id="actionField" value="">
+
+        <div class="decision-buttons">
+          <button type="button" class="decision-btn approve-btn" onclick="setAction('approve')">
+            <div class="db-icon">✅</div>
+            <div class="db-text">
+              <strong>Approve Account</strong>
+              <span>Grant access to the HR dashboard. The member can log in immediately.</span>
+            </div>
+          </button>
+          <button type="button" class="decision-btn reject-btn" onclick="setAction('reject')">
+            <div class="db-icon">❌</div>
+            <div class="db-text">
+              <strong>Reject Account</strong>
+              <span>Deny access. Provide a reason that will be shown on login.</span>
+            </div>
+          </button>
+        </div>
+
+        <div class="reason-section" id="reasonSection" style="display:none">
+          <label>Rejection Reason <span class="required">*</span></label>
+          <textarea name="rejection_reason" placeholder="Explain why this account is being rejected..." rows="4"></textarea>
+          {% if form.non_field_errors %}<div class="field-err">{{ form.non_field_errors.0 }}</div>{% endif %}
+        </div>
+
+        <div class="form-actions" id="formActions" style="display:none">
+          <button type="submit" class="btn-confirm" id="confirmBtn">Confirm Decision</button>
+          <a href="{% url 'admin_panel' %}" class="btn-cancel">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function setAction(action) {
+  document.getElementById('actionField').value = action;
+  document.getElementById('reasonSection').style.display = action === 'reject' ? 'block' : 'none';
+  document.getElementById('formActions').style.display = 'flex';
+  const btn = document.getElementById('confirmBtn');
+  document.querySelectorAll('.decision-btn').forEach(b => b.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  if (action === 'approve') {
+    btn.textContent = '✅ Confirm Approval';
+    btn.className = 'btn-confirm btn-confirm-approve';
+  } else {
+    btn.textContent = '❌ Confirm Rejection';
+    btn.className = 'btn-confirm btn-confirm-reject';
+  }
+}
+</script>
+{% endblock %}
