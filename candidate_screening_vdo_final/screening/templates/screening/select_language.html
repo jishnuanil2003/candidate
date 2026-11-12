@@ -115,6 +115,28 @@ body {
   justify-content: center;
   gap: 6px;
 }
+.lang-btn.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: #111724;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+.lang-btn.disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+.lang-pill-soon {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.12);
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-top: 3px;
+}
 </style>
 {% endblock %}
 
@@ -142,29 +164,33 @@ body {
   <form method="POST" action="{% url 'select_language' %}" id="langForm">
     {% csrf_token %}
     <div class="lang-grid">
-      <button type="submit" name="lang" value="en" class="lang-btn">
+      <button type="submit" name="lang" value="en" class="lang-btn" title="English interview with Sarah">
         <span class="lang-native">English</span>
         <span class="lang-sub">English</span>
       </button>
 
-      <button type="submit" name="lang" value="ml" class="lang-btn">
+      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
         <span class="lang-native">മലയാളം</span>
         <span class="lang-sub">Malayalam</span>
+        <span class="lang-pill-soon">Coming soon</span>
       </button>
 
-      <button type="submit" name="lang" value="hi" class="lang-btn">
+      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
         <span class="lang-native">हिन्दी</span>
         <span class="lang-sub">Hindi</span>
+        <span class="lang-pill-soon">Coming soon</span>
       </button>
 
-      <button type="submit" name="lang" value="ta" class="lang-btn">
+      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
         <span class="lang-native">தமிழ்</span>
         <span class="lang-sub">Tamil</span>
+        <span class="lang-pill-soon">Coming soon</span>
       </button>
 
-      <button type="submit" name="lang" value="te" class="lang-btn">
+      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
         <span class="lang-native">తెలుగు</span>
         <span class="lang-sub">Telugu</span>
+        <span class="lang-pill-soon">Coming soon</span>
       </button>
     </div>
   </form>

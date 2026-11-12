@@ -23,68 +23,74 @@ LANGUAGE_FOLDER_MAP = {
 
 ALLOWED_LANGUAGES = {'english', 'malayalam', 'hindi', 'tamil', 'telugu'}
 
-FILENAME_PATTERN = re.compile(r'^(q([1-9]|1[0-9]|2[0-4])|idle_waiting|q_complete|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
+FILENAME_PATTERN = re.compile(r'^(q_?([1-9]|1[0-9]|2[0-4])|idle_waiting|q_complete|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
 
 
 def get_interview_media_root():
     return Path(getattr(settings, 'INTERVIEW_MEDIA_ROOT', settings.BASE_DIR / 'interview_media'))
 
 
+def _find_question_file(lang_dir, question_id):
+    for prefix in (f'q{question_id}', f'q_{question_id}'):
+        for ext in ('mp4', 'webm'):
+            cand = lang_dir / f"{prefix}.{ext}"
+            if cand.exists() and cand.is_file():
+                return cand
+    return None
+
+
 def resolve_question_media(lang_code, question_id):
     """
-    Resolve a question's media file given language code and question_id (1-18).
+    Resolve a question's media file given language code and question_id (1-24).
+    Lookup order:
+      1. chosen language file (e.g. interview_media/english/q<id>.mp4 or q_<id>.mp4)
+      2. english fallback (if chosen language is not english)
+      3. None (text on screen fallback) - no legacy pre-recorded fallback.
     Returns dict:
       {
-         'url': '/media/interview/<lang_folder>/q<id>.mp4',
+         'url': '/media/interview/<lang_folder>/<filename>?v=<mtime>',
          'is_fallback': bool,
          'lang_folder': str,
-         'filename': 'q<id>.mp4',
-         'file_path': Path
+         'filename': str,
+         'file_path': Path,
+         'absolute_path': str
       }
     """
     media_root = get_interview_media_root()
     folder = LANGUAGE_FOLDER_MAP.get(lang_code, 'english')
-    filename = f'q{question_id}.mp4'
 
     lang_dir = media_root / folder
-    target_path = lang_dir / filename
-
-    if not target_path.exists():
-        # Check webm alternative
-        webm_path = lang_dir / f'q{question_id}.webm'
-        if webm_path.exists():
-            target_path = webm_path
-            filename = f'q{question_id}.webm'
-
+    target_path = _find_question_file(lang_dir, question_id)
     is_fallback = False
-    if not target_path.exists():
+
+    if not target_path and folder != 'english':
         logger.warning('Missing video for language=%s, question_id=%s. Falling back to english.', folder, question_id)
         fallback_dir = media_root / 'english'
-        target_path = fallback_dir / f'q{question_id}.mp4'
-        if not target_path.exists():
-            target_path = fallback_dir / f'q{question_id}.webm'
-            filename = f'q{question_id}.webm'
-        else:
-            filename = f'q{question_id}.mp4'
-        folder = 'english'
-        is_fallback = True
+        target_path = _find_question_file(fallback_dir, question_id)
+        if target_path:
+            folder = 'english'
+            is_fallback = True
 
-    if not target_path.exists() or not target_path.is_file():
+    if not target_path or not target_path.is_file():
         logger.warning('Missing video for question_id=%s in all languages.', question_id)
         return {
             'url': None,
             'is_fallback': False,
             'lang_folder': folder,
-            'filename': filename,
+            'filename': None,
             'file_path': None,
+            'absolute_path': None,
         }
 
+    mtime = int(target_path.stat().st_mtime)
+    filename = target_path.name
     return {
-        'url': f'/media/interview/{folder}/{filename}',
+        'url': f'/media/interview/{folder}/{filename}?v={mtime}',
         'is_fallback': is_fallback,
         'lang_folder': folder,
         'filename': filename,
         'file_path': target_path,
+        'absolute_path': str(target_path.resolve()),
     }
 
 
@@ -207,15 +213,23 @@ def serve_interview_media(request, lang, filename):
         file_path = media_root / 'english' / filename
 
     if not file_path.exists():
-        static_candidate = settings.BASE_DIR / 'screening' / 'static' / 'screening' / 'videos' / filename
-        if static_candidate.exists() and static_candidate.is_file():
-            file_path = static_candidate
+        is_question = bool(re.match(r'^q_?([1-9]|1[0-9]|2[0-4])\.', filename))
+        if not is_question:
+            static_candidate = settings.BASE_DIR / 'screening' / 'static' / 'screening' / 'videos' / filename
+            if static_candidate.exists() and static_candidate.is_file():
+                file_path = static_candidate
 
     if not file_path.exists() or not file_path.is_file():
         raise Http404('Video file not found')
 
     file_size = file_path.stat().st_size
     content_type = 'video/webm' if filename.endswith('.webm') else 'video/mp4'
+    actual_mtime = int(file_path.stat().st_mtime)
+    v_param = request.GET.get('v')
+    if v_param and v_param == str(actual_mtime):
+        cache_control = 'public, max-age=31536000, immutable'
+    else:
+        cache_control = 'no-cache, must-revalidate'
 
     range_header = request.META.get('HTTP_RANGE', '').strip()
     if range_header and range_header.startswith('bytes='):
@@ -240,12 +254,12 @@ def serve_interview_media(request, lang, filename):
             response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
             response['Content-Length'] = str(chunk_length)
             response['Accept-Ranges'] = 'bytes'
-            response['Cache-Control'] = 'public, max-age=31536000, immutable'
+            response['Cache-Control'] = cache_control
             return response
 
     # Full content response
     response = FileResponse(open(file_path, 'rb'), content_type=content_type)
     response['Content-Length'] = str(file_size)
     response['Accept-Ranges'] = 'bytes'
-    response['Cache-Control'] = 'public, max-age=31536000, immutable'
+    response['Cache-Control'] = cache_control
     return response

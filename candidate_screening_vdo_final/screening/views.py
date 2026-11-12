@@ -21,6 +21,7 @@ from .translations import TRANSLATIONS, map_option_to_canonical_english, get_err
 from .media import resolve_question_media, resolve_error_media, serve_interview_media
 
 SUPPORTED_LANGUAGES = {'en', 'ml', 'hi', 'ta', 'te'}
+ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en']))
 from .dmcore import DmcoreError, load_session, save_answer, complete_interview as dmcore_complete_interview
 
 logger = logging.getLogger(__name__)
@@ -525,11 +526,12 @@ def index(request):
     request.session.modified = True
 
     saved_lang = request.session.get('interview_language')
-    if saved_lang and saved_lang in SUPPORTED_LANGUAGES:
+    if saved_lang and saved_lang in SUPPORTED_LANGUAGES and saved_lang in ENABLED_INTERVIEW_LANGUAGES:
         return redirect('interview')
 
     return render(request, 'screening/select_language.html', {
-        'candidate_name': candidate_name
+        'candidate_name': candidate_name,
+        'enabled_languages': ENABLED_INTERVIEW_LANGUAGES,
     })
 
 
@@ -544,10 +546,16 @@ def select_language(request):
         if not lang or lang not in SUPPORTED_LANGUAGES:
             return HttpResponseBadRequest('Invalid language selected')
 
+
+
         answers = request.session.get('answers', {})
         addendum_text = None
         if len(answers) > 0:
             return HttpResponseBadRequest('Language cannot be changed once the interview has started')
+
+        enabled_langs = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en']))
+        if lang not in enabled_langs:
+            return HttpResponseBadRequest('Selected language is not enabled. Only English is currently supported.')
 
         request.session['interview_language'] = lang
         request.session['language'] = lang
@@ -619,7 +627,7 @@ def get_question(request):
         if request.body:
             try:
                 data = json.loads(request.body)
-                if 'lang' in data and data['lang'] in SUPPORTED_LANGUAGES:
+                if 'lang' in data and data['lang'] in SUPPORTED_LANGUAGES and data['lang'] in ENABLED_INTERVIEW_LANGUAGES:
                     if len(answers) == 0:
                         lang = data['lang']
                         request.session['interview_language'] = lang
@@ -643,6 +651,14 @@ def get_question(request):
         next_media_info = resolve_question_media(lang, next_question['id']) if next_question else None
         error_media = resolve_error_media(lang, question.get('key', ''), question.get('error_video', ''))
         error_video_url = error_media['url'] if error_media else None
+        debug_info = None
+        if settings.DEBUG:
+            debug_info = {
+                'question_id': question['id'],
+                'language': lang,
+                'resolved_file': media_info.get('filename') or 'None (text only)',
+                'absolute_path': media_info.get('absolute_path') or 'None (text on screen)',
+            }
 
         return JsonResponse({
             'done': False,
@@ -666,6 +682,7 @@ def get_question(request):
             },
             'progress': int((q_index / total) * 100) if total else 100,
             'ui': ui_trans,
+            'debug': debug_info,
         })
     except Exception:
         logger.exception('Could not resolve the next interview question')

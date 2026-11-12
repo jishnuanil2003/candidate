@@ -1,8 +1,20 @@
-import os
 import sys
 from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.conf import settings
+
+LANG_CODE_TO_FOLDER = {
+    'en': 'english',
+    'ml': 'malayalam',
+    'hi': 'hindi',
+    'ta': 'tamil',
+    'te': 'telugu',
+    'english': 'english',
+    'malayalam': 'malayalam',
+    'hindi': 'hindi',
+    'tamil': 'tamil',
+    'telugu': 'telugu',
+}
 
 LANGUAGES = ['english', 'malayalam', 'hindi', 'tamil', 'telugu']
 QUESTION_IDS = list(range(1, 25))  # 1 to 24
@@ -27,31 +39,44 @@ ERROR_VIDEOS = [
     ('internship_start_date_error', ['error_internship_start_date']),
     ('internship_end_date_error', ['error_internship_end_date']),
     ('internship_topic_error', ['error_internship_topic']),
-    ('full_name_error', ['error_name']),
+    ('full_name_error', ['name_error', 'error_name']),
     ('email_error', ['error_email']),
     ('phone_error', ['error_phone']),
-    ('graduation_year_error', ['error_year']),
+    ('graduation_year_error', ['graduation_error', 'error_year']),
     ('skills_error', ['error_skills']),
     ('why_good_fit_error', ['cover_note_error', 'error_cover']),
     ('empty_error', ['error_empty']),
+    ('validation_error', []),
 ]
 
 
 class Command(BaseCommand):
-    help = 'Check interview video status across all 5 languages (ids 1-24) and optional error videos.'
+    help = 'Check interview video status across languages (ids 1-24) and optional error videos.'
 
     def handle(self, *args, **options):
         media_root = Path(getattr(settings, 'INTERVIEW_MEDIA_ROOT', settings.BASE_DIR / 'interview_media'))
         self.stdout.write(f'Checking interview media root: {media_root}\n')
 
+        enabled_codes = getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en'])
+        enabled_folders = {LANG_CODE_TO_FOLDER.get(c, c) for c in enabled_codes}
+
         overall_status = {}
+        has_failure = False
 
         for lang in LANGUAGES:
+            is_enabled = lang in enabled_folders
             lang_dir = media_root / lang
             self.stdout.write(self.style.MIGRATE_HEADING(f'[{lang.upper()}] - {lang_dir}'))
+
+            if not is_enabled:
+                self.stdout.write(self.style.NOTICE('  Status: NOT ENABLED (coming soon)\n'))
+                overall_status[lang] = 'NOT ENABLED (coming soon)'
+                continue
+
             if not lang_dir.exists():
                 self.stdout.write(self.style.ERROR(f'  Directory does NOT exist: {lang_dir}'))
                 overall_status[lang] = 'MISSING (0/24)'
+                has_failure = True
                 continue
 
             # Check question videos (q1 to q24)
@@ -61,10 +86,13 @@ class Command(BaseCommand):
             self.stdout.write(self.style.NOTICE('  -- Question Videos (q1-q24) --'))
             for q_id in QUESTION_IDS:
                 found_path = None
-                for ext in ('mp4', 'webm'):
-                    candidate = lang_dir / f'q{q_id}.{ext}'
-                    if candidate.exists() and candidate.is_file():
-                        found_path = candidate
+                for prefix in (f'q{q_id}', f'q_{q_id}'):
+                    for ext in ('mp4', 'webm'):
+                        candidate = lang_dir / f'{prefix}.{ext}'
+                        if candidate.exists() and candidate.is_file():
+                            found_path = candidate
+                            break
+                    if found_path:
                         break
 
                 if found_path:
@@ -73,15 +101,17 @@ class Command(BaseCommand):
                     self.stdout.write(f'  q{q_id:02d}: PRESENT ({found_path.name}) - {size_mb:.2f} MB')
                     present_count += 1
                 else:
-                    self.stdout.write(self.style.WARNING(f'  q{q_id:02d}: MISSING (expected q{q_id}.mp4)'))
+                    self.stdout.write(self.style.WARNING(f'  q{q_id:02d}: MISSING (expected q{q_id}.mp4 or q_{q_id}.mp4)'))
                     missing_count += 1
 
             if present_count == 24:
                 status_label = 'READY (24/24)'
             elif present_count > 0:
                 status_label = f'PARTIAL ({present_count}/24)'
+                has_failure = True
             else:
                 status_label = 'MISSING (0/24)'
+                has_failure = True
             overall_status[lang] = status_label
 
             self.stdout.write(f'  Question videos status for {lang}: {status_label} ({present_count}/24 present, {missing_count}/24 missing)')
@@ -113,7 +143,16 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.MIGRATE_HEADING('=== OVERALL SUMMARY ==='))
         for lang, status in overall_status.items():
-            color_fn = self.style.SUCCESS if 'READY' in status else self.style.WARNING
+            if 'READY' in status:
+                color_fn = self.style.SUCCESS
+            elif 'NOT ENABLED' in status:
+                color_fn = self.style.NOTICE
+            else:
+                color_fn = self.style.WARNING
             self.stdout.write(f'  {lang:10s}: {color_fn(status)}')
 
-        self.stdout.write(self.style.SUCCESS('\nVideo status check complete.'))
+        if has_failure:
+            self.stdout.write(self.style.ERROR('\nVideo status check failed: missing question videos in enabled language(s).'))
+            sys.exit(1)
+
+        self.stdout.write(self.style.SUCCESS('\nVideo status check complete: all enabled question videos present.'))

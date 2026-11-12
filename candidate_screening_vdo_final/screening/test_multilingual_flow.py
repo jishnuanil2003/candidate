@@ -2,7 +2,7 @@ import json
 import logging
 from unittest.mock import patch
 
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from django.http import HttpResponse
 
 from .media import resolve_question_media, serve_interview_media
@@ -22,6 +22,7 @@ class TestSession(dict):
         pass
 
 
+@override_settings(ENABLED_INTERVIEW_LANGUAGES=['en', 'ml', 'hi', 'ta', 'te'])
 class MultilingualFlowTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -109,13 +110,13 @@ class MultilingualFlowTests(SimpleTestCase):
     def test_media_resolver_and_fallback_warning(self):
         # English video exists
         en_res = resolve_question_media('english', 1)
-        self.assertEqual(en_res['url'], '/media/interview/english/q1.mp4')
+        self.assertEqual(en_res['url'].split('?')[0], '/media/interview/english/q1.mp4')
         self.assertFalse(en_res['is_fallback'])
 
         # Malayalam video does not exist yet -> falls back to english with warning
         with self.assertLogs('screening.media', level='WARNING') as cm:
             ml_res = resolve_question_media('malayalam', 1)
-            self.assertEqual(ml_res['url'], '/media/interview/english/q1.mp4')
+            self.assertEqual(ml_res['url'].split('?')[0], '/media/interview/english/q1.mp4')
             self.assertTrue(ml_res['is_fallback'])
             self.assertIn('Missing video for language=malayalam, question_id=1. Falling back to english.', cm.output[0])
 
@@ -128,7 +129,8 @@ class MultilingualFlowTests(SimpleTestCase):
         self.assertEqual(res2.status_code, 400)
 
     def test_serve_media_http_range_206_response(self):
-        req = self.factory.get('/media/interview/english/q1.mp4', HTTP_RANGE='bytes=0-100')
+        url = resolve_question_media('english', 1)['url']
+        req = self.factory.get(url, HTTP_RANGE='bytes=0-100')
         res = serve_interview_media(req, 'english', 'q1.mp4')
 
         self.assertEqual(res.status_code, 206)
@@ -139,7 +141,8 @@ class MultilingualFlowTests(SimpleTestCase):
         self.assertIn('max-age=31536000', res['Cache-Control'])
 
     def test_serve_media_full_response_headers(self):
-        req = self.factory.get('/media/interview/english/q1.mp4')
+        url = resolve_question_media('english', 1)['url']
+        req = self.factory.get(url)
         res = serve_interview_media(req, 'english', 'q1.mp4')
 
         self.assertEqual(res.status_code, 200)

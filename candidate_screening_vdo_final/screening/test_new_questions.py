@@ -512,7 +512,7 @@ class MediaHelperAndErrorVideoOrderTests(SimpleTestCase):
 
     def test_question_media_missing_returns_none_and_warns(self):
         with self.assertLogs('screening.media', level='WARNING') as cm:
-            res = resolve_question_media('hindi', 24)
+            res = resolve_question_media('hindi', 99)
             self.assertIsNone(res['url'])
             self.assertFalse(res['is_fallback'])
-            self.assertTrue(any('Missing video for question_id=24 in all languages.' in out for out in cm.output))
+            self.assertTrue(any('Missing video for question_id=99 in all languages.' in out for out in cm.output))

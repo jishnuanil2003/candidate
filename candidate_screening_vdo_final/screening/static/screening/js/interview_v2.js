@@ -435,6 +435,9 @@ async function fetchQuestion() {
   if (playbackId !== currentPlaybackId) return;
 
   const q = data.question;
+  if (data.debug) {
+    console.log(`[DEBUG] Language: ${data.debug.language} | Question: ${data.debug.question_id} | Resolved File: ${data.debug.resolved_file} | Absolute Path: ${data.debug.absolute_path}`);
+  }
   videoEngine.preloadPair(q.question_video, q.next_question_video);
   currentQuestion = q;
   selectedOption = null;

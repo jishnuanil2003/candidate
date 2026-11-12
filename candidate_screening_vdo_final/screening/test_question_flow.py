@@ -43,15 +43,15 @@ class DmcoreQuestionFlowTests(SimpleTestCase):
         first.session = session
         first_question = json.loads(get_question(first).content)['question']
         self.assertEqual(first_question['id'], 4)
-        self.assertTrue(first_question['question_video'].endswith(('q4.mp4', 'q_role.mp4')))
-        self.assertTrue(first_question['next_question_video'].endswith(('q15.mp4', 'q_notice.mp4')))
+        self.assertTrue(first_question['question_video'].split('?')[0].endswith(('q4.mp4', 'q_role.mp4')))
+        self.assertTrue(first_question['next_question_video'].split('?')[0].endswith(('q15.mp4', 'q_notice.mp4')))
 
         session['q_index'] = 1
         second = RequestFactory().post('/api/question/')
         second.session = session
         second_question = json.loads(get_question(second).content)['question']
         self.assertEqual(second_question['id'], 15)
-        self.assertTrue(second_question['question_video'].endswith(('q15.mp4', 'q_notice.mp4')))
+        self.assertTrue(second_question['question_video'].split('?')[0].endswith(('q15.mp4', 'q_notice.mp4')))
         self.assertIsNone(second_question['next_question_video'])
 
     def test_empty_questions_keep_exact_fallback_message(self):
