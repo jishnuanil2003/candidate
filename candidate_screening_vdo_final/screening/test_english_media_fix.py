@@ -1,7 +1,7 @@
 """Tests verifying the English-only media resolution and DMCore playlist fix."""
 import json
 from pathlib import Path
-from django.test import TestCase, Client, RequestFactory
+from django.test import TestCase, Client, RequestFactory, override_settings
 from django.conf import settings
 from screening.media import resolve_question_media, get_interview_media_root
 from screening.questions import (
@@ -161,6 +161,7 @@ class EnglishMediaFixTests(TestCase):
         data = json.loads(resp.content)
         self.assertTrue(data.get('done'))
 
+    @override_settings(ENABLED_INTERVIEW_LANGUAGES=['en'])
     def test_disabled_language_rejected(self):
         """Attempting to select a disabled regional language is rejected with 400 Bad Request."""
         client = Client()

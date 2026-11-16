@@ -97,6 +97,21 @@ class VideoEngine {
     this.elGlow.classList.remove('error-glow');
     this.elRepeatBtn.disabled = false;
 
+    if (!src) {
+      if (this._overlayTimeout) clearTimeout(this._overlayTimeout);
+      this._hideOverlay();
+      if (idleSrc && this.elIdle.src !== idleSrc) {
+        this.elIdle.src = idleSrc;
+        this.elIdle.load();
+      }
+      if (idleSrc) {
+        this.elIdle.style.zIndex = 2;
+        this.elIdle.classList.remove('hidden');
+        this.elIdle.play().catch(() => { });
+      }
+      return;
+    }
+
     // --- Delay loading overlay to prevent flashing on fast/preloaded connections ---
     if (this._overlayTimeout) clearTimeout(this._overlayTimeout);
     this._overlayTimeout = setTimeout(() => {

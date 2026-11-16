@@ -3,156 +3,23 @@
 {% block title %}Choose Interview Language – TalentBot{% endblock %}
 
 {% block extra_css %}
-<style>
-.navbar { display: none; }
-body {
-  background: #0b0f19;
-  color: #e2e8f0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  margin: 0;
-}
-.lang-card-wrap {
-  width: 100%;
-  max-width: 580px;
-  background: #121826;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 2.25rem 2rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
-  text-align: center;
-}
-.lang-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(83, 74, 183, 0.15);
-  color: #a78bfa;
-  border: 1px solid rgba(139, 92, 246, 0.25);
-  padding: 5px 14px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  margin-bottom: 1.25rem;
-}
-.lang-title {
-  font-size: 1.65rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 0.5rem 0;
-  line-height: 1.25;
-}
-.lang-greeting {
-  color: #94a3b8;
-  font-size: 0.95rem;
-  margin: 0 0 1.75rem 0;
-  line-height: 1.5;
-}
-.lang-greeting strong {
-  color: #f1f5f9;
-}
-.lang-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  margin-bottom: 1.5rem;
-}
-@media (min-width: 480px) {
-  .lang-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .lang-grid .lang-btn:last-child:nth-child(odd) {
-    grid-column: span 2;
-  }
-}
-.lang-btn {
-  background: #182234;
-  border: 1.5px solid rgba(255, 255, 255, 0.07);
-  border-radius: 14px;
-  padding: 1rem 1.1rem;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-height: 72px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  color: inherit;
-  width: 100%;
-}
-.lang-btn:hover {
-  background: #1e2b42;
-  border-color: #6366f1;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
-}
-.lang-btn:active {
-  transform: translateY(0);
-}
-.lang-native {
-  font-size: 1.15rem;
-  font-weight: 600;
-  color: #ffffff;
-}
-.lang-sub {
-  font-size: 0.78rem;
-  color: #94a3b8;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-.lang-note {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.lang-btn.disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  pointer-events: none;
-  background: #111724;
-  border-color: rgba(255, 255, 255, 0.04);
-}
-.lang-btn.disabled:hover {
-  transform: none;
-  box-shadow: none;
-  border-color: rgba(255, 255, 255, 0.04);
-}
-.lang-pill-soon {
-  display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #94a3b8;
-  background: rgba(148, 163, 184, 0.12);
-  padding: 2px 7px;
-  border-radius: 999px;
-  margin-top: 3px;
-}
-</style>
+<link rel="stylesheet" href="{% static 'screening/css/landing.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="lang-card-wrap">
-  <div class="lang-badge">
+<div class="landing-container" role="region" aria-label="Language selection">
+  <!-- Brand Header Badge -->
+  <div class="brand-badge" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="14" height="14">
       <circle cx="12" cy="12" r="10"/>
       <line x1="2" y1="12" x2="22" y2="12"/>
       <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
     </svg>
-    TalentBot Screening
+    <span>TalentBot Screening</span>
   </div>
 
-  <h1 class="lang-title">Choose Your Language</h1>
-  <p class="lang-greeting">
+  <h1 class="landing-title">Choose Your Language</h1>
+  <p class="landing-greeting">
     {% if candidate_name %}
       Welcome, <strong>{{ candidate_name }}</strong>.
     {% else %}
@@ -161,45 +28,132 @@ body {
     Please select the language you prefer for your interview questions and video.
   </p>
 
-  <form method="POST" action="{% url 'select_language' %}" id="langForm">
+  <!-- What to Expect Strip -->
+  <div class="expectations-strip" aria-label="Interview expectations">
+    <div class="expect-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="15" height="15" aria-hidden="true">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      <span>Microphone needed · Answer by voice or typing</span>
+    </div>
+    {% if question_count %}
+    <span class="expect-divider" aria-hidden="true"></span>
+    <div class="expect-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="15" height="15" aria-hidden="true">
+        <path d="M9 11l3 3L22 4"/>
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+      </svg>
+      <span>{% if has_conditionals %}Up to {{ question_count }} questions{% else %}{{ question_count }} questions{% endif %}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Language Selection Form -->
+  <form method="POST" action="{% url 'select_language' %}" id="langForm" aria-label="Language selection">
     {% csrf_token %}
-    <div class="lang-grid">
-      <button type="submit" name="lang" value="en" class="lang-btn" title="English interview with Sarah">
-        <span class="lang-native">English</span>
-        <span class="lang-sub">English</span>
+    <div class="lang-grid" role="group" aria-label="Available languages">
+      
+      <!-- English -->
+      {% if 'en' in enabled_languages %}
+      <button type="submit" name="lang" value="en" class="lang-card" aria-label="Select English interview">
+        <span class="lang-watermark lang-script-en" aria-hidden="true">En</span>
+        <div class="lang-card-content">
+          <span class="lang-native lang-script-en" lang="en">English</span>
+          <span class="lang-sub">English</span>
+        </div>
+        <div class="lang-indicator" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       </button>
+      {% endif %}
 
-      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
-        <span class="lang-native">മലയാളം</span>
-        <span class="lang-sub">Malayalam</span>
-        <span class="lang-pill-soon">Coming soon</span>
+      <!-- Malayalam -->
+      {% if 'ml' in enabled_languages %}
+      <button type="submit" name="lang" value="ml" class="lang-card" aria-label="Select Malayalam interview (മലയാളം)">
+        <span class="lang-watermark lang-script-ml" aria-hidden="true">മ</span>
+        <div class="lang-card-content">
+          <span class="lang-native lang-script-ml" lang="ml">മലയാളം</span>
+          <span class="lang-sub">Malayalam</span>
+        </div>
+        <div class="lang-indicator" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       </button>
+      {% endif %}
 
-      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
-        <span class="lang-native">हिन्दी</span>
-        <span class="lang-sub">Hindi</span>
-        <span class="lang-pill-soon">Coming soon</span>
+      <!-- Hindi -->
+      {% if 'hi' in enabled_languages %}
+      <button type="submit" name="lang" value="hi" class="lang-card" aria-label="Select Hindi interview (हिन्दी)">
+        <span class="lang-watermark lang-script-hi" aria-hidden="true">अ</span>
+        <div class="lang-card-content">
+          <span class="lang-native lang-script-hi" lang="hi">हिन्दी</span>
+          <span class="lang-sub">Hindi</span>
+        </div>
+        <div class="lang-indicator" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       </button>
+      {% endif %}
 
-      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
-        <span class="lang-native">தமிழ்</span>
-        <span class="lang-sub">Tamil</span>
-        <span class="lang-pill-soon">Coming soon</span>
+      <!-- Tamil -->
+      {% if 'ta' in enabled_languages %}
+      <button type="submit" name="lang" value="ta" class="lang-card" aria-label="Select Tamil interview (தமிழ்)">
+        <span class="lang-watermark lang-script-ta" aria-hidden="true">த</span>
+        <div class="lang-card-content">
+          <span class="lang-native lang-script-ta" lang="ta">தமிழ்</span>
+          <span class="lang-sub">Tamil</span>
+        </div>
+        <div class="lang-indicator" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       </button>
+      {% endif %}
 
-      <button type="button" class="lang-btn disabled" disabled title="Coming soon — English is supported for now">
-        <span class="lang-native">తెలుగు</span>
-        <span class="lang-sub">Telugu</span>
-        <span class="lang-pill-soon">Coming soon</span>
+      <!-- Telugu -->
+      {% if 'te' in enabled_languages %}
+      <button type="submit" name="lang" value="te" class="lang-card" aria-label="Select Telugu interview (తెలుగు)">
+        <span class="lang-watermark lang-script-te" aria-hidden="true">తె</span>
+        <div class="lang-card-content">
+          <span class="lang-native lang-script-te" lang="te">తెలుగు</span>
+          <span class="lang-sub">Telugu</span>
+        </div>
+        <div class="lang-indicator" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
       </button>
+      {% endif %}
+
     </div>
   </form>
 
-  <p class="lang-note">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-    You can change your language before submitting your first answer.
-  </p>
+  <!-- Footer & Privacy Note -->
+  <footer class="landing-footer">
+    <div class="secure-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14" aria-hidden="true">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span>Your responses are secure and confidential · TalentBot</span>
+    </div>
+    <div class="change-note">
+      You can change your language before submitting your first answer.
+    </div>
+  </footer>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'screening/js/landing.js' %}"></script>
 {% endblock %}

@@ -21,7 +21,7 @@ from .translations import TRANSLATIONS, map_option_to_canonical_english, get_err
 from .media import resolve_question_media, resolve_error_media, serve_interview_media
 
 SUPPORTED_LANGUAGES = {'en', 'ml', 'hi', 'ta', 'te'}
-ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en']))
+ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
 from .dmcore import DmcoreError, load_session, save_answer, complete_interview as dmcore_complete_interview
 
 logger = logging.getLogger(__name__)
@@ -466,8 +466,15 @@ def index(request):
     if request.session.get('token_interview') and request.session.get('dmcore_token') == token and request.session.get('dmcore_play_list'):
         if request.session.get('interview_language') and request.session.get('interview_language') in SUPPORTED_LANGUAGES:
             return redirect('interview')
+        playlist = request.session.get('dmcore_play_list') or []
+        question_count = len(playlist)
+        has_conditionals = any(item.get('question_id') in (10, 21) for item in playlist) if isinstance(playlist, list) else False
+        enabled = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
         return render(request, 'screening/select_language.html', {
-            'candidate_name': request.session.get('candidate_name', '')
+            'candidate_name': request.session.get('candidate_name', ''),
+            'enabled_languages': enabled,
+            'question_count': question_count,
+            'has_conditionals': has_conditionals,
         })
     try:
         session_data = load_session(token)
@@ -529,9 +536,15 @@ def index(request):
     if saved_lang and saved_lang in SUPPORTED_LANGUAGES and saved_lang in ENABLED_INTERVIEW_LANGUAGES:
         return redirect('interview')
 
+    playlist = request.session.get('dmcore_play_list') or []
+    question_count = len(playlist)
+    has_conditionals = any(item.get('question_id') in (10, 21) for item in playlist) if isinstance(playlist, list) else False
+    enabled = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
     return render(request, 'screening/select_language.html', {
         'candidate_name': candidate_name,
-        'enabled_languages': ENABLED_INTERVIEW_LANGUAGES,
+        'enabled_languages': enabled,
+        'question_count': question_count,
+        'has_conditionals': has_conditionals,
     })
 
 
@@ -553,9 +566,9 @@ def select_language(request):
         if len(answers) > 0:
             return HttpResponseBadRequest('Language cannot be changed once the interview has started')
 
-        enabled_langs = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en']))
+        enabled_langs = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
         if lang not in enabled_langs:
-            return HttpResponseBadRequest('Selected language is not enabled. Only English is currently supported.')
+            return HttpResponseBadRequest('Selected language is not enabled.')
 
         request.session['interview_language'] = lang
         request.session['language'] = lang

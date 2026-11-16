@@ -9,3 +9,6 @@ interview_media/**/*.webm
 !interview_media/**/.gitkeep
 !interview_media/**/README.txt
 
+.env
+__pycache__/
+*.pyc

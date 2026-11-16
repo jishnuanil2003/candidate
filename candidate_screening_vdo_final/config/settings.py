@@ -73,7 +73,7 @@ WHITENOISE_MANIFEST_STRICT = False
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 INTERVIEW_MEDIA_ROOT = BASE_DIR / 'interview_media'
-ENABLED_INTERVIEW_LANGUAGES = ['en']
+ENABLED_INTERVIEW_LANGUAGES = ['en', 'ml', 'hi', 'ta', 'te']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

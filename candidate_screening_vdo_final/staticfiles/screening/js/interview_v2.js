@@ -32,13 +32,19 @@ async function getCSRF() {
 let currentQuestion = null;
 let selectedOption = null;
 let isLocked = false;
-let selectedLanguage = new URLSearchParams(window.location.search).get('lang') || 'en';
+let selectedLanguage = document.getElementById('langSelect')?.value || new URLSearchParams(window.location.search).get('lang') || 'en';
 let ttsEnabled = true;
 let currentPlaybackId = 0;
 let localizedEnglishOnlyError = "Please enter your response in English only.";
 
 // ─── Language & Text-To-Speech Functions ──────────────────────────────────────
 async function changeLanguage(lang) {
+  if (currentQuestion && currentQuestion.number > 1) {
+    alert("Language cannot be changed once the interview has started.");
+    const selectEl = document.getElementById('langSelect');
+    if (selectEl) selectEl.value = selectedLanguage;
+    return;
+  }
   selectedLanguage = lang;
   cancelTTS();
   const selectEl = document.getElementById('langSelect');
@@ -113,7 +119,7 @@ function handleRepeat() {
   cancelTTS();
   if (!currentQuestion) return;
   const q = currentQuestion;
-  const shouldMuteVideo = (selectedLanguage !== 'en');
+  const shouldMuteVideo = (selectedLanguage !== 'en' && q.video_is_fallback !== false);
   videoEngine.repeatQuestion(shouldMuteVideo);
   if (selectedLanguage !== 'en' && ttsEnabled) {
     setTimeout(() => {
@@ -415,12 +421,23 @@ async function fetchQuestion() {
 
   if (data.done) {
     localizeUI(data.ui);
+  const langSelectEl = document.getElementById('langSelect');
+  if (langSelectEl) {
+    langSelectEl.value = selectedLanguage;
+    if (q.number > 1) {
+      langSelectEl.disabled = true;
+      langSelectEl.title = "Language is locked during the interview";
+    }
+  }
     await handleCompletion(data.completion_video, data.ui);
     return;
   }
   if (playbackId !== currentPlaybackId) return;
 
   const q = data.question;
+  if (data.debug) {
+    console.log(`[DEBUG] Language: ${data.debug.language} | Question: ${data.debug.question_id} | Resolved File: ${data.debug.resolved_file} | Absolute Path: ${data.debug.absolute_path}`);
+  }
   videoEngine.preloadPair(q.question_video, q.next_question_video);
   currentQuestion = q;
   selectedOption = null;
@@ -445,6 +462,7 @@ async function fetchQuestion() {
   if (playbackId !== currentPlaybackId) return;
 
   const shouldMuteVideo = (selectedLanguage !== 'en');
+
   videoEngine.playQuestion(q.question_video, q.idle_video, shouldMuteVideo);
 
   if (selectedLanguage !== 'en' && ttsEnabled) {
@@ -483,6 +501,7 @@ async function fetchQuestion() {
 
 // ─── VIDEO WAIT ───────────────────────────────────────────────────────────────
 async function getVideoWaitTime(src) {
+  if (!src) return 0;
   try {
     const duration = await Promise.race([
       getVideoDuration(src),
@@ -618,29 +637,51 @@ async function handleSubmit() {
   }
 
   if (!data.valid) {
-    showError(data.error || 'Invalid input. Please try again.');
+    if (data.skipped) {
+      showError(data.error_text || data.error || 'Question skipped.');
+      if (statusText) statusText.textContent = 'Question skipped.';
+      setProgress(data.progress);
+      if (data.done) {
+        localizeUI(data.ui);
+        await handleCompletion(data.completion_video, data.ui);
+        return;
+      }
+      isLocked = false;
+      await sleep(1000);
+      await fetchQuestion();
+      return;
+    }
+
+    const errVideo = data.error_video_url || data.error_video;
+    showError(data.error_text || data.error || 'Invalid input. Please try again.');
     if (data.retryable) {
       lockInput(false);
       isLocked = false;
       return;
     }
-    if (data.error_video) {
+    if (errVideo) {
       const shouldMuteVideo = (selectedLanguage !== 'en');
-      videoEngine.playError(data.error_video, data.idle_video, shouldMuteVideo);
+
+      videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
 
       if (selectedLanguage !== 'en' && ttsEnabled) {
         await sleep(300);
-        speakText(cleanHtml(data.error), selectedLanguage);
+        speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
       }
 
       if (selectedLanguage !== 'en' && ttsEnabled) {
         await waitForAudio(currentAudio);
       } else {
-        const waitMs = await getVideoWaitTime(data.error_video);
+        const waitMs = await getVideoWaitTime(errVideo);
         await sleep(waitMs + 500);
       }
     } else {
-      await sleep(600);
+      if (ttsEnabled) {
+        speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
+        await waitForAudio(currentAudio);
+      } else {
+        await sleep(600);
+      }
     }
     renderInput(currentQuestion);
     lockInput(false);
@@ -667,6 +708,7 @@ async function handleCompletion(completionVideoSrc, ui) {
   if (completionVideoSrc) {
     await sleep(1000); // A little gap before completion video
     const shouldMuteVideo = (selectedLanguage !== 'en');
+
     videoEngine.playQuestion(completionVideoSrc, null, shouldMuteVideo);
 
     if (selectedLanguage !== 'en' && ttsEnabled && ui && ui.thank_you) {
@@ -712,12 +754,15 @@ async function handleCompletion(completionVideoSrc, ui) {
     statusValue.textContent = 'Submitted ✓';
     statusRow.append(statusLabel, statusValue);
     csMeta.appendChild(statusRow);
-  }
 
-  completionScreen.style.display = 'flex';
-  questionEcho.style.display = 'none';
-  inputArea.style.display = 'none';
-  lockInput(true);
+    completionScreen.style.display = 'flex';
+    questionEcho.style.display = 'none';
+    inputArea.style.display = 'none';
+    lockInput(true);
+  } else {
+    showError(data.error || 'Failed to submit interview. Please try again or contact the recruiter.');
+    lockInput(false);
+  }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────

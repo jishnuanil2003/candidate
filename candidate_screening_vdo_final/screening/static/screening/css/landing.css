@@ -1,0 +1,428 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TalentBot AI Screening — Language Selection Landing Page
+   Modern, accessible, responsive design with polished micro-interactions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg-dark: #0b0f19;
+  --bg-card: #121826;
+  --bg-card-hover: #172033;
+  --bg-card-active: #1b263d;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-border-hover: rgba(99, 102, 241, 0.4);
+  --surface-border-selected: #10b981;
+  
+  --accent-purple: #6366f1;
+  --accent-purple-light: #a78bfa;
+  --accent-green: #10b981;
+  --accent-green-glow: rgba(16, 185, 129, 0.25);
+  
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --radius-card: 16px;
+  --radius-pill: 9999px;
+  --radius-modal: 24px;
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-ml: 'Noto Sans Malayalam', 'Inter', sans-serif;
+  --font-hi: 'Noto Sans Devanagari', 'Inter', sans-serif;
+  --font-ta: 'Noto Sans Tamil', 'Inter', sans-serif;
+  --font-te: 'Noto Sans Telugu', 'Inter', sans-serif;
+}
+
+/* Page shell */
+.navbar {
+  display: none !important;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+body > main {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  box-sizing: border-box;
+}
+
+/* Calm ambient glow behind the main container */
+body::before {
+  content: '';
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(16, 185, 129, 0.04) 50%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(40px);
+}
+
+.landing-container {
+  width: 100%;
+  max-width: 600px;
+  background: var(--bg-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-modal);
+  padding: 2.25rem 2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  animation: landingFadeUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes landingFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Brand pill */
+.brand-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-purple-light);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-bottom: 1.25rem;
+}
+
+.brand-badge svg {
+  flex-shrink: 0;
+  color: var(--accent-purple-light);
+}
+
+/* Header typography */
+.landing-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.landing-greeting {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  margin: 0 0 1.4rem 0;
+}
+
+.landing-greeting strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* "What to expect" pill strip */
+.expectations-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 0.7rem 0.95rem;
+  margin-bottom: 1.6rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+
+.expect-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.expect-pill svg {
+  color: var(--accent-green);
+  flex-shrink: 0;
+}
+
+.expect-divider {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Language Cards Grid */
+.lang-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  margin-bottom: 1.6rem;
+}
+
+/* 2 columns on screens 540px and wider */
+@media (min-width: 540px) {
+  .lang-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  /* 5th card spans both columns centered */
+  .lang-grid .lang-card:nth-child(5):last-child {
+    grid-column: 1 / -1;
+    max-width: 280px;
+    justify-self: center;
+    width: 100%;
+  }
+}
+
+/* Language Card Button */
+.lang-card {
+  position: relative;
+  background: #151d2c;
+  border: 1.5px solid var(--surface-border);
+  border-radius: var(--radius-card);
+  padding: 1.05rem 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  color: inherit;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Subtle watermark glyph in background */
+.lang-watermark {
+  position: absolute;
+  right: 12px;
+  bottom: -4px;
+  font-size: 3.25rem;
+  font-weight: 700;
+  color: #ffffff;
+  opacity: 0.04;
+  pointer-events: none;
+  line-height: 1;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.lang-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  position: relative;
+  z-index: 1;
+}
+
+.lang-native {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.3;
+}
+
+.lang-sub {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Selection check circle */
+.lang-indicator {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  z-index: 1;
+}
+
+.lang-indicator svg {
+  width: 15px;
+  height: 15px;
+  color: #ffffff;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Hover & Focus state */
+.lang-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--surface-border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 16px rgba(99, 102, 241, 0.12);
+}
+
+.lang-card:hover .lang-watermark {
+  opacity: 0.07;
+  transform: scale(1.05);
+}
+
+.lang-card:hover .lang-indicator {
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.lang-card:focus-visible {
+  outline: 2px solid var(--accent-purple);
+  outline-offset: 3px;
+}
+
+/* Selected / clicked state */
+.lang-card.is-selected {
+  background: var(--bg-card-active);
+  border-color: var(--surface-border-selected);
+  box-shadow: 0 0 0 1px var(--surface-border-selected), 0 10px 24px rgba(0, 0, 0, 0.4), 0 0 20px var(--accent-green-glow);
+  transform: scale(0.985);
+}
+
+.lang-card.is-selected .lang-indicator {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.lang-card.is-selected .lang-indicator svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Script-specific font families */
+.lang-script-ml { font-family: var(--font-ml); }
+.lang-script-hi { font-family: var(--font-hi); }
+.lang-script-ta { font-family: var(--font-ta); }
+.lang-script-te { font-family: var(--font-te); }
+.lang-script-en { font-family: var(--font-sans); }
+
+/* Footer */
+.landing-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: center;
+  text-align: center;
+}
+
+.secure-note {
+  font-size: 0.8rem;
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  font-weight: 500;
+  max-width: 100%;
+}
+
+.secure-note svg {
+  flex-shrink: 0;
+  color: #10b981;
+}
+
+.change-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Mobile responsive fine-tuning (< 540px) */
+@media (max-width: 539px) {
+  body > main {
+    padding: 1rem 0.75rem;
+    width: 100%;
+    max-width: 100vw;
+  }
+  .landing-container {
+    width: 100%;
+    max-width: 100%;
+    padding: 1.5rem 1rem;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .landing-title {
+    font-size: 1.45rem;
+  }
+  .landing-greeting {
+    font-size: 0.88rem;
+  }
+  .expectations-strip {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    padding: 0.65rem 0.8rem;
+  }
+  .expect-divider {
+    display: none;
+  }
+  .lang-card {
+    padding: 0.9rem 1rem;
+  }
+  .lang-native {
+    font-size: 1.15rem;
+  }
+}
+
+/* Accessibility: prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .landing-container {
+    animation: none !important;
+  }
+  .lang-card:hover {
+    transform: none !important;
+  }
+  .lang-card.is-selected {
+    transform: none !important;
+  }
+}
