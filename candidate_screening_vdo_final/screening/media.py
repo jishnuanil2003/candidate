@@ -23,7 +23,11 @@ LANGUAGE_FOLDER_MAP = {
 
 ALLOWED_LANGUAGES = {'english', 'malayalam', 'hindi', 'tamil', 'telugu'}
 
-FILENAME_PATTERN = re.compile(r'^(q_?([1-9]|1[0-9]|2[0-4])|idle_waiting|q_complete|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
+MEDIA_MANIFEST = {
+    'outro': 'outro.mp4',
+}
+
+FILENAME_PATTERN = re.compile(r'^(q_?([1-9]|1[0-9]|2[0-4])|idle_waiting|outro|q_complete|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
 
 
 def get_interview_media_root():
@@ -92,6 +96,94 @@ def resolve_question_media(lang_code, question_id):
         'file_path': target_path,
         'absolute_path': str(target_path.resolve()),
     }
+
+
+def resolve_outro_media(lang_code):
+    """
+    Resolve the outro video file for the chosen language.
+    Lookup rules:
+      1. chosen language file (e.g. interview_media/<chosen language>/outro.mp4 or outro.webm)
+      2. If missing: play NO video (never fall back to english or another language, never fall back to legacy file).
+         Return url: None and log a warning.
+    Returns dict:
+      {
+         'url': '/media/interview/<lang_folder>/<filename>?v=<mtime>' or None,
+         'is_fallback': bool,
+         'lang_folder': str,
+         'filename': str or None,
+         'file_path': Path or None,
+         'absolute_path': str or None,
+      }
+    """
+    media_root = get_interview_media_root()
+    folder = LANGUAGE_FOLDER_MAP.get(lang_code.lower() if lang_code else '', 'english')
+    if folder not in ALLOWED_LANGUAGES:
+        logger.warning('Invalid or unsupported language=%s for outro media.', lang_code)
+        return {
+            'url': None,
+            'is_fallback': False,
+            'lang_folder': folder,
+            'filename': None,
+            'file_path': None,
+            'absolute_path': None,
+        }
+
+    lang_dir = media_root / folder
+    target_path = None
+    manifest_file = MEDIA_MANIFEST.get('outro', 'outro.mp4')
+    stem = manifest_file.rsplit('.', 1)[0]
+    for ext in ('mp4', 'webm'):
+        cand = lang_dir / f"{stem}.{ext}"
+        if cand.exists() and cand.is_file():
+            target_path = cand
+            break
+
+    if not target_path or not target_path.is_file():
+        logger.warning('Missing outro video for language=%s.', folder)
+        return {
+            'url': None,
+            'is_fallback': False,
+            'lang_folder': folder,
+            'filename': None,
+            'file_path': None,
+            'absolute_path': None,
+        }
+
+    mtime = int(target_path.stat().st_mtime)
+    filename = target_path.name
+    return {
+        'url': f'/media/interview/{folder}/{filename}?v={mtime}',
+        'is_fallback': False,
+        'lang_folder': folder,
+        'filename': filename,
+        'file_path': target_path,
+        'absolute_path': str(target_path.resolve()),
+    }
+
+
+def resolve_media(lang_code, media_name='outro'):
+    """
+    Manifest-based media resolver.
+    """
+    if media_name == 'outro':
+        return resolve_outro_media(lang_code)
+    media_root = get_interview_media_root()
+    folder = LANGUAGE_FOLDER_MAP.get(lang_code.lower() if lang_code else '', 'english')
+    manifest_filename = MEDIA_MANIFEST.get(media_name)
+    if not manifest_filename:
+        return None
+    target = media_root / folder / manifest_filename
+    if target.exists() and target.is_file():
+        mtime = int(target.stat().st_mtime)
+        return {
+            'url': f'/media/interview/{folder}/{manifest_filename}?v={mtime}',
+            'is_fallback': False,
+            'lang_folder': folder,
+            'filename': manifest_filename,
+            'file_path': target,
+            'absolute_path': str(target.resolve()),
+        }
+    return None
 
 
 def resolve_error_media(lang_code, field_key, reason='invalid', legacy_error_video=None):
@@ -207,12 +299,14 @@ def serve_interview_media(request, lang, filename):
     media_root = get_interview_media_root()
     file_path = media_root / folder / filename
 
-    # Fallback to english if regional file does not exist
-    if not file_path.exists() and folder != 'english':
+    is_outro = filename.startswith('outro.')
+
+    # Fallback to english if regional file does not exist (disabled for outro)
+    if not file_path.exists() and folder != 'english' and not is_outro:
         logger.warning('Requested file %s/%s not found, attempting fallback to english.', folder, filename)
         file_path = media_root / 'english' / filename
 
-    if not file_path.exists():
+    if not file_path.exists() and not is_outro:
         is_question = bool(re.match(r'^q_?([1-9]|1[0-9]|2[0-4])\.', filename))
         if not is_question:
             static_candidate = settings.BASE_DIR / 'screening' / 'static' / 'screening' / 'videos' / filename

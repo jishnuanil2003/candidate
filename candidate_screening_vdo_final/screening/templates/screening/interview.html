@@ -172,13 +172,13 @@ main{padding:0;min-height:0}
     <!-- Speaking overlay (Hidden, kept for JS reference) -->
     <div id="speakingOverlay" style="display:none"></div>
 
-    <!-- Completion screen -->
+    <!-- Completion screen (shown after outro.mp4 playback) -->
     <div class="completion-screen" id="completionScreen" style="display:none">
       <div class="cs-anim">
         <svg viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="45" stroke="#1D9E75" stroke-width="4" stroke-dasharray="283" stroke-dashoffset="283" class="cs-circle"/><polyline points="30,50 44,64 70,36" stroke="#1D9E75" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="60" stroke-dashoffset="60" class="cs-check"/></svg>
       </div>
       <h2>Interview Complete!</h2>
-      <p id="csThankYou">Thank you for your time. Your application has been submitted successfully.</p>
+      <p id="csThankYou">Thank you for completing your screening interview. Our team will review your responses and be in touch soon. Have a great day!</p>
       <div class="cs-meta" id="csMeta"></div>
       <a href="{% url 'index' %}" class="cs-btn">Return to Home</a>
     </div>

@@ -163,7 +163,7 @@ function localizeUI(ui) {
       `;
     }
     if (csThankYou) {
-      csThankYou.textContent = "Thank you for your time. Your application has been submitted successfully.";
+      csThankYou.textContent = "Thank you for completing your screening interview. Our team will review your responses and be in touch soon. Have a great day!";
     }
     return;
   }
@@ -421,15 +421,15 @@ async function fetchQuestion() {
 
   if (data.done) {
     localizeUI(data.ui);
-  const langSelectEl = document.getElementById('langSelect');
-  if (langSelectEl) {
-    langSelectEl.value = selectedLanguage;
-    if (q.number > 1) {
-      langSelectEl.disabled = true;
-      langSelectEl.title = "Language is locked during the interview";
+    const langSelectEl = document.getElementById('langSelect');
+    if (langSelectEl) {
+      langSelectEl.value = selectedLanguage;
+      if (typeof q !== 'undefined' && q && q.number > 1) {
+        langSelectEl.disabled = true;
+        langSelectEl.title = "Language is locked during the interview";
+      }
     }
-  }
-    await handleCompletion(data.completion_video, data.ui);
+    await handleCompletion(data.outro_video || data.completion_video, data.ui);
     return;
   }
   if (playbackId !== currentPlaybackId) return;
@@ -643,7 +643,7 @@ async function handleSubmit() {
       setProgress(data.progress);
       if (data.done) {
         localizeUI(data.ui);
-        await handleCompletion(data.completion_video, data.ui);
+        await handleCompletion(data.outro_video || data.completion_video, data.ui);
         return;
       }
       isLocked = false;
@@ -694,46 +694,74 @@ async function handleSubmit() {
   setProgress(data.progress);
   if (data.done) {
     localizeUI(data.ui);
-    await handleCompletion(data.completion_video, data.ui);
+    await handleCompletion(data.outro_video || data.completion_video, data.ui);
     return;
   }
   isLocked = false;
   await fetchQuestion();
 }
 
+let completionHandled = false;
+
 // ─── COMPLETION ───────────────────────────────────────────────────────────────
-async function handleCompletion(completionVideoSrc, ui) {
+async function handleCompletion(outroVideoSrc, ui) {
+  if (completionHandled) return;
+  completionHandled = true;
   currentPlaybackId++;
   cancelTTS();
-  if (completionVideoSrc) {
-    await sleep(1000); // A little gap before completion video
-    const shouldMuteVideo = (selectedLanguage !== 'en');
-
-    videoEngine.playQuestion(completionVideoSrc, null, shouldMuteVideo);
-
-    if (selectedLanguage !== 'en' && ttsEnabled && ui && ui.thank_you) {
-      await sleep(300);
-      speakText(cleanHtml(ui.thank_you), selectedLanguage);
-    }
-
-    if (selectedLanguage !== 'en' && ttsEnabled) {
-      await waitForAudio(currentAudio);
-    } else {
-      const waitMs = await getVideoWaitTime(completionVideoSrc);
-      await sleep(waitMs);
-    }
-  }
-  videoEngine.stopAll();
-  setSpeakingOverlay(false);
+  lockInput(true);
+  if (questionEcho) questionEcho.style.display = 'none';
+  if (inputArea) inputArea.style.display = 'none';
   setProgress(100);
 
+  // Start complete call in the background while outro plays
+  const completePromise = api('/api/complete/', {})
+    .then(async res => {
+      try {
+        return await res.json();
+      } catch (e) {
+        return { success: false, error: 'Failed to parse response' };
+      }
+    })
+    .catch(e => {
+      console.error('Completion error:', e);
+      return { success: false, error: 'Connection error' };
+    });
+
+  if (outroVideoSrc) {
+    // Play the chosen language's outro.mp4 once, with sound, on the final screen
+    videoEngine.playQuestion(outroVideoSrc, null, false);
+
+    const waitMs = await getVideoWaitTime(outroVideoSrc);
+    await new Promise(resolve => {
+      let finished = false;
+      const onEnd = () => {
+        if (!finished) {
+          finished = true;
+          videoEngine.elQuestion.removeEventListener('ended', onEnd);
+          resolve();
+        }
+      };
+      videoEngine.elQuestion.addEventListener('ended', onEnd, { once: true });
+      setTimeout(onEnd, Math.max(waitMs, 1000));
+    });
+  } else {
+    // If the chosen language has no outro.mp4: play NO video, show thank-you text, log warning
+    console.warn(`No outro video found for language ${selectedLanguage}; showing thank-you text only.`);
+  }
+
+  videoEngine.stopAll();
+  setSpeakingOverlay(false);
+
+  // Wait for background completion call
   let data = {};
   try {
-    const res = await api('/api/complete/', {});
-    data = await res.json();
-  } catch (e) { console.error('Completion error:', e); }
+    data = await completePromise;
+  } catch (e) {
+    console.error('Completion error:', e);
+  }
 
-  if (data.success) {
+  if (data && data.success) {
     csMeta.replaceChildren();
     if (data.application_id !== undefined) {
       const row = document.createElement('div');
@@ -755,12 +783,17 @@ async function handleCompletion(completionVideoSrc, ui) {
     statusRow.append(statusLabel, statusValue);
     csMeta.appendChild(statusRow);
 
+    if (ui && ui.thank_you) {
+      const csThankYou = document.getElementById('csThankYou');
+      if (csThankYou) csThankYou.textContent = ui.thank_you;
+    }
+
     completionScreen.style.display = 'flex';
-    questionEcho.style.display = 'none';
-    inputArea.style.display = 'none';
-    lockInput(true);
   } else {
-    showError(data.error || 'Failed to submit interview. Please try again or contact the recruiter.');
+    // If completion fails after its retries, show the existing error message after the outro
+    completionHandled = false;
+    if (inputArea) inputArea.style.display = 'block';
+    showError((data && data.error) || 'Failed to submit interview. Please try again or contact the recruiter.');
     lockInput(false);
   }
 }

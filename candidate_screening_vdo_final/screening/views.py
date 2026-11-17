@@ -18,7 +18,7 @@ from .questions import (QUESTION_LOOKUP, QUESTIONS, NO_QUESTIONS_MESSAGE, build_
                         is_empty_or_filler, ValidationResult)
 from .forms import HRSignupForm, HRLoginForm
 from .translations import TRANSLATIONS, map_option_to_canonical_english, get_error_text, ADDENDUM_ERROR_TEXTS
-from .media import resolve_question_media, resolve_error_media, serve_interview_media
+from .media import resolve_question_media, resolve_error_media, serve_interview_media, resolve_outro_media, MEDIA_MANIFEST
 
 SUPPORTED_LANGUAGES = {'en', 'ml', 'hi', 'ta', 'te'}
 ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
@@ -653,7 +653,9 @@ def get_question(request):
         lang_data = TRANSLATIONS.get(lang, {})
         ui_trans['english_only'] = lang_data.get('errors', {}).get('english_only', 'Please enter your response in English only.')
         if q_index >= len(active_qs):
-            return JsonResponse({'done': True, 'completion_video': '/media/interview/english/q_complete.mp4', 'ui': ui_trans})
+            outro_info = resolve_outro_media(lang)
+            outro_url = outro_info['url'] if outro_info else None
+            return JsonResponse({'done': True, 'outro_video': outro_url, 'completion_video': outro_url, 'ui': ui_trans})
 
         question = active_qs[q_index]
         translated = get_translated_question(question, lang)
@@ -880,6 +882,10 @@ def submit_answer(request):
                 new_index = request.session['q_index']
                 total = len(active_qs)
                 done = new_index >= total
+                outro_url = None
+                if done:
+                    outro_info = resolve_outro_media(lang)
+                    outro_url = outro_info['url'] if outro_info else None
                 return JsonResponse({
                     'valid': False,
                     'reason': reason,
@@ -891,7 +897,8 @@ def submit_answer(request):
                     'error_text': error_msg_translated,
                     'error': error_msg_translated,
                     'progress': int((new_index / total) * 100) if total else 100,
-                    'completion_video': static(VIDEO_BASE + 'q_complete.mp4') if done else None,
+                    'outro_video': outro_url,
+                    'completion_video': outro_url,
                     'ui': TRANSLATIONS.get(lang, {}).get('ui', {})
                 })
 
@@ -943,9 +950,14 @@ def submit_answer(request):
         new_index = request.session['q_index']
         total = len(active_qs)
         done = new_index >= total
+        outro_url = None
+        if done:
+            outro_info = resolve_outro_media(lang)
+            outro_url = outro_info['url'] if outro_info else None
         return JsonResponse({'valid': True, 'done': done,
             'progress': int((new_index / total) * 100) if total else 100,
-            'completion_video': static(VIDEO_BASE + 'q_complete.mp4') if done else None,
+            'outro_video': outro_url,
+            'completion_video': outro_url,
             'ui': TRANSLATIONS.get(lang, {}).get('ui', {})})
     except Exception as e:
         import traceback
