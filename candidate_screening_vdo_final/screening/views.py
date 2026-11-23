@@ -18,7 +18,7 @@ from .questions import (QUESTION_LOOKUP, QUESTIONS, NO_QUESTIONS_MESSAGE, build_
                         is_empty_or_filler, ValidationResult)
 from .forms import HRSignupForm, HRLoginForm
 from .translations import TRANSLATIONS, map_option_to_canonical_english, get_error_text, ADDENDUM_ERROR_TEXTS
-from .media import resolve_question_media, resolve_error_media, serve_interview_media, resolve_outro_media, MEDIA_MANIFEST
+from .media import resolve_question_media, resolve_error_media, serve_interview_media, resolve_outro_media, resolve_idle_media, MEDIA_MANIFEST
 
 SUPPORTED_LANGUAGES = {'en', 'ml', 'hi', 'ta', 'te'}
 ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
@@ -623,6 +623,164 @@ def interview(request):
     })
 
 
+def build_question_payload(q_index, active_qs, lang):
+    ui_trans = TRANSLATIONS.get(lang, {}).get('ui', {}).copy()
+    lang_data = TRANSLATIONS.get(lang, {})
+    ui_trans['english_only'] = lang_data.get('errors', {}).get('english_only', 'Please enter your response in English only.')
+    total = len(active_qs)
+    idle_video_url = resolve_idle_media(lang)
+    outro_media = resolve_outro_media(lang)
+    outro_url = outro_media.get('url') if outro_media else None
+
+    if q_index >= total:
+        return {
+            'done': True,
+            'progress': 100,
+            'outro_video': outro_url,
+            'completion_video': outro_url,
+            'idle_video': idle_video_url,
+            'ui': ui_trans,
+        }
+
+    question = active_qs[q_index]
+    translated = get_translated_question(question, lang)
+    next_question = active_qs[q_index + 1] if q_index + 1 < total else None
+
+    media_info = resolve_question_media(lang, question['id'])
+    next_media_info = resolve_question_media(lang, next_question['id']) if next_question else None
+    error_media = resolve_error_media(lang, question.get('key', ''), question.get('error_video', ''))
+    error_video_url = error_media['url'] if error_media else None
+
+    next_q_data = None
+    if next_question:
+        next_tr = get_translated_question(next_question, lang)
+        next_m = resolve_question_media(lang, next_question['id'])
+        next_err = resolve_error_media(lang, next_question.get('key', ''), next_question.get('error_video', ''))
+        next_err_url = next_err['url'] if next_err else None
+        next_q_data = {
+            'id': next_tr['id'],
+            'text': next_tr['question'],
+            'type': next_tr['type'],
+            'options': next_tr.get('options', []),
+            'other_label': next_tr.get('other_label', ''),
+            'placeholder': next_tr.get('placeholder', ''),
+            'hint': next_tr.get('hint', ''),
+            'optional': next_tr.get('optional', False),
+            'number': q_index + 2,
+            'total': total,
+            'question_video': next_m['url'],
+            'video_is_fallback': next_m['is_fallback'],
+            'error_video_url': next_err_url,
+            'error_video': next_err_url or f"/media/interview/english/{next_tr['error_video']}",
+            'idle_video': idle_video_url,
+        }
+
+    conditional_next = {}
+    if question['id'] == 10:
+        q14 = next((item for item in active_qs if item['id'] == 14), None)
+        q11 = next((item for item in active_qs if item['id'] == 11), None)
+        if q14:
+            tr14 = get_translated_question(q14, lang)
+            m14 = resolve_question_media(lang, 14)
+            err14 = resolve_error_media(lang, q14.get('key', ''), q14.get('error_video', ''))
+            conditional_next['fresher'] = {
+                'id': tr14['id'],
+                'text': tr14['question'],
+                'type': tr14['type'],
+                'options': tr14.get('options', []),
+                'other_label': tr14.get('other_label', ''),
+                'placeholder': tr14.get('placeholder', ''),
+                'hint': tr14.get('hint', ''),
+                'optional': tr14.get('optional', False),
+                'number': 14,
+                'total': total,
+                'question_video': m14['url'],
+                'video_is_fallback': m14['is_fallback'],
+                'error_video_url': err14['url'] if err14 else None,
+                'idle_video': idle_video_url,
+            }
+        if q11:
+            tr11 = get_translated_question(q11, lang)
+            m11 = resolve_question_media(lang, 11)
+            err11 = resolve_error_media(lang, q11.get('key', ''), q11.get('error_video', ''))
+            conditional_next['experienced'] = {
+                'id': tr11['id'],
+                'text': tr11['question'],
+                'type': tr11['type'],
+                'options': tr11.get('options', []),
+                'other_label': tr11.get('other_label', ''),
+                'placeholder': tr11.get('placeholder', ''),
+                'hint': tr11.get('hint', ''),
+                'optional': tr11.get('optional', False),
+                'number': 11,
+                'total': total,
+                'question_video': m11['url'],
+                'video_is_fallback': m11['is_fallback'],
+                'error_video_url': err11['url'] if err11 else None,
+                'idle_video': idle_video_url,
+            }
+    elif question['id'] == 21:
+        conditional_next['no'] = {'done': True, 'outro_video': outro_url}
+        q22 = next((item for item in active_qs if item['id'] == 22), None)
+        if q22:
+            tr22 = get_translated_question(q22, lang)
+            m22 = resolve_question_media(lang, 22)
+            err22 = resolve_error_media(lang, q22.get('key', ''), q22.get('error_video', ''))
+            conditional_next['yes'] = {
+                'id': tr22['id'],
+                'text': tr22['question'],
+                'type': tr22['type'],
+                'options': tr22.get('options', []),
+                'other_label': tr22.get('other_label', ''),
+                'placeholder': tr22.get('placeholder', ''),
+                'hint': tr22.get('hint', ''),
+                'optional': tr22.get('optional', False),
+                'number': 22,
+                'total': total,
+                'question_video': m22['url'],
+                'video_is_fallback': m22['is_fallback'],
+                'error_video_url': err22['url'] if err22 else None,
+                'idle_video': idle_video_url,
+            }
+
+    debug_info = None
+    if settings.DEBUG:
+        debug_info = {
+            'question_id': question['id'],
+            'language': lang,
+            'resolved_file': media_info.get('filename') or 'None (text only)',
+            'absolute_path': media_info.get('absolute_path') or 'None (text on screen)',
+        }
+
+    return {
+        'done': False,
+        'question': {
+            'id': translated['id'],
+            'text': translated['question'],
+            'type': translated['type'],
+            'options': translated.get('options', []),
+            'other_label': translated.get('other_label', ''),
+            'placeholder': translated.get('placeholder', ''),
+            'hint': translated.get('hint', ''),
+            'optional': translated.get('optional', False),
+            'number': q_index + 1,
+            'total': total,
+            'question_video': media_info['url'],
+            'video_is_fallback': media_info['is_fallback'],
+            'next_question_video': next_media_info['url'] if next_media_info else None,
+            'error_video_url': error_video_url,
+            'error_video': error_video_url or f"/media/interview/english/{translated['error_video']}",
+            'idle_video': idle_video_url,
+        },
+        'next_question': next_q_data,
+        'conditional_next': conditional_next,
+        'idle_video': idle_video_url,
+        'outro_video': outro_url,
+        'progress': int((q_index / total) * 100) if total else 100,
+        'ui': ui_trans,
+        'debug': debug_info,
+    }
+
 @require_http_methods(['POST'])
 def get_question(request):
     try:
@@ -649,56 +807,8 @@ def get_question(request):
             except json.JSONDecodeError:
                 pass
 
-        ui_trans = TRANSLATIONS.get(lang, {}).get('ui', {}).copy()
-        lang_data = TRANSLATIONS.get(lang, {})
-        ui_trans['english_only'] = lang_data.get('errors', {}).get('english_only', 'Please enter your response in English only.')
-        if q_index >= len(active_qs):
-            outro_info = resolve_outro_media(lang)
-            outro_url = outro_info['url'] if outro_info else None
-            return JsonResponse({'done': True, 'outro_video': outro_url, 'completion_video': outro_url, 'ui': ui_trans})
-
-        question = active_qs[q_index]
-        translated = get_translated_question(question, lang)
-        next_question = active_qs[q_index + 1] if q_index + 1 < len(active_qs) else None
-        total = len(active_qs)
-
-        media_info = resolve_question_media(lang, question['id'])
-        next_media_info = resolve_question_media(lang, next_question['id']) if next_question else None
-        error_media = resolve_error_media(lang, question.get('key', ''), question.get('error_video', ''))
-        error_video_url = error_media['url'] if error_media else None
-        debug_info = None
-        if settings.DEBUG:
-            debug_info = {
-                'question_id': question['id'],
-                'language': lang,
-                'resolved_file': media_info.get('filename') or 'None (text only)',
-                'absolute_path': media_info.get('absolute_path') or 'None (text on screen)',
-            }
-
-        return JsonResponse({
-            'done': False,
-            'question': {
-                'id': translated['id'],
-                'text': translated['question'],
-                'type': translated['type'],
-                'options': translated.get('options', []),
-                'other_label': translated.get('other_label', ''),
-                'placeholder': translated.get('placeholder', ''),
-                'hint': translated.get('hint', ''),
-                'optional': translated.get('optional', False),
-                'number': q_index + 1,
-                'total': total,
-                'question_video': media_info['url'],
-                'video_is_fallback': media_info['is_fallback'],
-                'next_question_video': next_media_info['url'] if next_media_info else None,
-                'error_video_url': error_video_url,
-                'error_video': error_video_url or f"/media/interview/english/{translated['error_video']}",
-                'idle_video': '/media/interview/english/idle_waiting.mp4',
-            },
-            'progress': int((q_index / total) * 100) if total else 100,
-            'ui': ui_trans,
-            'debug': debug_info,
-        })
+        payload = build_question_payload(q_index, active_qs, lang)
+        return JsonResponse(payload)
     except Exception:
         logger.exception('Could not resolve the next interview question')
         return JsonResponse({'error': 'Could not load the next question.'}, status=400)
@@ -706,6 +816,8 @@ def get_question(request):
 
 @require_http_methods(['POST'])
 def submit_answer(request):
+    t_view_start = time.perf_counter()
+    dmcore_time = 0.0
     try:
         data = json.loads(request.body)
         raw_value = data.get('value', '')
@@ -908,7 +1020,7 @@ def submit_answer(request):
 
             return JsonResponse({'valid': False, 'reason': reason, 'error': error_msg_translated, 'error_text': error_msg_translated, 'error_video_url': error_video_url, 'attempts_left': attempts_left,
                 'error_video': error_video_url,
-                'idle_video': '/media/interview/english/idle_waiting.mp4'})
+                'idle_video': resolve_idle_media(lang)})
                 
         if token_mode:
             is_skipped_optional = q.get('optional', False) and not value_english.strip()
@@ -919,11 +1031,14 @@ def submit_answer(request):
                 is_400 = False
 
                 for attempt in range(2):
+                    t_dm_start = time.perf_counter()
                     try:
                         save_answer(token, q['id'], answer_text)
+                        dmcore_time += (time.perf_counter() - t_dm_start)
                         saved = True
                         break
                     except DmcoreError as error:
+                        dmcore_time += (time.perf_counter() - t_dm_start)
                         if error.status == 400:
                             logger.warning('DMCore returned 400 for unknown question_id=%s; continuing without saving', q['id'])
                             is_400 = True
@@ -948,17 +1063,14 @@ def submit_answer(request):
         else:
             active_qs = get_active_questions(answers)
         new_index = request.session['q_index']
-        total = len(active_qs)
-        done = new_index >= total
-        outro_url = None
-        if done:
-            outro_info = resolve_outro_media(lang)
-            outro_url = outro_info['url'] if outro_info else None
-        return JsonResponse({'valid': True, 'done': done,
-            'progress': int((new_index / total) * 100) if total else 100,
-            'outro_video': outro_url,
-            'completion_video': outro_url,
-            'ui': TRANSLATIONS.get(lang, {}).get('ui', {})})
+        payload = build_question_payload(new_index, active_qs, lang)
+        payload['valid'] = True
+        t_view_total = time.perf_counter() - t_view_start
+        logger.info(
+            "submit_answer timings: total=%.3fs, dmcore=%.3fs, local_view=%.3fs [q_id=%s]",
+            t_view_total, dmcore_time, max(0.0, t_view_total - dmcore_time), q.get('id')
+        )
+        return JsonResponse(payload)
     except Exception as e:
         import traceback
         traceback.print_exc()

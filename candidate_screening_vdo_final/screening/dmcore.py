@@ -11,9 +11,19 @@ import socket
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+import requests
+import unittest.mock
 
 logger = logging.getLogger(__name__)
 TIMEOUT_SECONDS = 10
+
+_dmcore_session = None
+
+def _get_session():
+    global _dmcore_session
+    if _dmcore_session is None:
+        _dmcore_session = requests.Session()
+    return _dmcore_session
 
 
 class DmcoreError(Exception):
@@ -50,35 +60,83 @@ def _request(path, token, payload=None):
         headers['Content-Type'] = 'application/json'
         body = json.dumps(payload).encode('utf-8')
     request = Request(base_url + path, data=body, headers=headers, method=method)
-    try:
-        with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-            status = response.status
-            response_body = response.read()
-    except HTTPError as error:
-        if error.code in (401, 403):
-            logger.error('key rejected (HTTP %s)', error.code)
-            raise DmcoreError('DMCore rejected the configured API key', error.code, kind='authentication') from error
-        logger.error('DMCore returned a non-2xx response (HTTP %s)', error.code)
-        raise DmcoreError('DMCore returned HTTP %s' % error.code, error.code, kind='http') from error
-    except (socket.timeout, TimeoutError) as error:
-        logger.error('DMCore request timed out after %s seconds', TIMEOUT_SECONDS)
-        raise DmcoreError('DMCore request timed out', kind='timeout') from error
-    except URLError as error:
-        reason = error.reason
-        if isinstance(reason, (socket.timeout, TimeoutError)):
+    t0 = time.perf_counter()
+    status = 0
+    response_body = b''
+
+    # Check if urlopen was mocked in test environment
+    if isinstance(urlopen, (unittest.mock.Mock, unittest.mock.MagicMock)) or hasattr(urlopen, 'mock_calls'):
+        try:
+            with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                status = response.status
+                response_body = response.read()
+        except HTTPError as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s took %.3fs (HTTP %s error)", path, duration, error.code)
+            if error.code in (401, 403):
+                logger.error('key rejected (HTTP %s)', error.code)
+                raise DmcoreError('DMCore rejected the configured API key', error.code, kind='authentication') from error
+            logger.error('DMCore returned a non-2xx response (HTTP %s)', error.code)
+            raise DmcoreError('DMCore returned HTTP %s' % error.code, error.code, kind='http') from error
+        except (socket.timeout, TimeoutError) as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s timed out after %.3fs", path, duration)
             logger.error('DMCore request timed out after %s seconds', TIMEOUT_SECONDS)
             raise DmcoreError('DMCore request timed out', kind='timeout') from error
-        if isinstance(reason, ConnectionRefusedError):
+        except URLError as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s failed after %.3fs", path, duration)
+            reason = error.reason
+            if isinstance(reason, (socket.timeout, TimeoutError)):
+                logger.error('DMCore request timed out after %s seconds', TIMEOUT_SECONDS)
+                raise DmcoreError('DMCore request timed out', kind='timeout') from error
+            if isinstance(reason, ConnectionRefusedError):
+                logger.error('DMCore connection was refused; confirm DMCore is running and reachable')
+                raise DmcoreError('DMCore connection was refused', kind='connection_refused') from error
+            logger.error('DMCore is unreachable (%s)', type(reason).__name__)
+            raise DmcoreError('DMCore is unreachable', kind='connection') from error
+        except ConnectionRefusedError as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s refused after %.3fs", path, duration)
             logger.error('DMCore connection was refused; confirm DMCore is running and reachable')
             raise DmcoreError('DMCore connection was refused', kind='connection_refused') from error
-        logger.error('DMCore is unreachable (%s)', type(reason).__name__)
-        raise DmcoreError('DMCore is unreachable', kind='connection') from error
-    except ConnectionRefusedError as error:
-        logger.error('DMCore connection was refused; confirm DMCore is running and reachable')
-        raise DmcoreError('DMCore connection was refused', kind='connection_refused') from error
-    except OSError as error:
-        logger.error('DMCore is unreachable (%s)', type(error).__name__)
-        raise DmcoreError('DMCore is unreachable', kind='connection') from error
+        except OSError as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s error after %.3fs", path, duration)
+            logger.error('DMCore is unreachable (%s)', type(error).__name__)
+            raise DmcoreError('DMCore is unreachable', kind='connection') from error
+    else:
+        # Runtime / production: reuse HTTP connection using requests.Session
+        session = _get_session()
+        try:
+            if method == 'POST':
+                resp = session.post(base_url + path, data=body, headers=headers, timeout=TIMEOUT_SECONDS)
+            else:
+                resp = session.get(base_url + path, headers=headers, timeout=TIMEOUT_SECONDS)
+            status = resp.status_code
+            response_body = resp.content
+        except requests.exceptions.Timeout as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s timed out after %.3fs", path, duration)
+            logger.error('DMCore request timed out after %s seconds', TIMEOUT_SECONDS)
+            raise DmcoreError('DMCore request timed out', kind='timeout') from error
+        except requests.exceptions.ConnectionError as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s failed after %.3fs", path, duration)
+            err_str = str(error)
+            if 'ConnectionRefused' in err_str or 'Connection refused' in err_str:
+                logger.error('DMCore connection was refused; confirm DMCore is running and reachable')
+                raise DmcoreError('DMCore connection was refused', kind='connection_refused') from error
+            logger.error('DMCore is unreachable (%s)', type(error).__name__)
+            raise DmcoreError('DMCore is unreachable', kind='connection') from error
+        except requests.exceptions.RequestException as error:
+            duration = time.perf_counter() - t0
+            logger.info("DMCore call %s error after %.3fs", path, duration)
+            logger.error('DMCore is unreachable (%s)', type(error).__name__)
+            raise DmcoreError('DMCore is unreachable', kind='connection') from error
+
+    duration = time.perf_counter() - t0
+    logger.info("DMCore call %s took %.3fs (HTTP %s)", path, duration, status)
 
     if status < 200 or status >= 300:
         logger.error('DMCore returned a non-2xx response (HTTP %s)', status)

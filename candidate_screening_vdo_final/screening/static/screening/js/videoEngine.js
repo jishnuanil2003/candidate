@@ -7,6 +7,7 @@ class VideoEngine {
     this.elQuestion = document.getElementById('videoQuestion');
     this.elIdle = document.getElementById('videoIdle');
     this.elError = document.getElementById('videoError');
+    this.elPreload = document.getElementById('videoPreload');
     this.elOverlay = document.getElementById('videoOverlay');
     this.elGlow = document.getElementById('videoGlow');
     this.elCaption = document.getElementById('avCaption');
@@ -17,6 +18,7 @@ class VideoEngine {
 
     this.currentQuestionSrc = null;
     this.currentIdleSrc = null;
+    this.currentPreloadSrc = null;
     this.state = 'idle'; // idle | speaking | waiting | error
     this._preloaded = {};
     this._loadingTimeout = null;
@@ -51,8 +53,39 @@ class VideoEngine {
     });
   }
 
+  /** Preload only the NEXT question's video into the hidden video element. */
+  preloadNext(url) {
+    if (!url || url === this.currentPreloadSrc) return;
+    this.currentPreloadSrc = url;
+    if (this.elPreload) {
+      this.elPreload.src = url;
+      this.elPreload.preload = 'auto';
+      this.elPreload.muted = true;
+      this.elPreload.load();
+    }
+  }
+
+  /** Preload idle/blink loop and outro video at interview start. */
+  preloadGlobalAssets(idleUrl, outroUrl) {
+    if (idleUrl && this.elIdle) {
+      if (!this.elIdle.src || !this.elIdle.src.includes(idleUrl.split('?')[0])) {
+        this.elIdle.src = idleUrl;
+        this.elIdle.load();
+      }
+    }
+    if (outroUrl && !this._preloaded[outroUrl]) {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.muted = true;
+      v.src = outroUrl;
+      v.load();
+      this._preloaded[outroUrl] = v;
+    }
+  }
+
   /** Keep only the current and next question video warm in the browser cache. */
   preloadPair(currentUrl, nextUrl) {
+    if (nextUrl) this.preloadNext(nextUrl);
     const wanted = new Set([currentUrl, nextUrl].filter(Boolean));
     for (const [url, video] of Object.entries(this._preloaded)) {
       if (!wanted.has(url)) {
@@ -66,6 +99,7 @@ class VideoEngine {
       if (this._preloaded[url]) continue;
       const video = document.createElement('video');
       video.preload = 'auto';
+      video.muted = true;
       video.src = url;
       this._preloaded[url] = video;
       video.load();
@@ -112,21 +146,19 @@ class VideoEngine {
       return;
     }
 
-    // --- Delay loading overlay to prevent flashing on fast/preloaded connections ---
+    // Delay loading overlay so fast/preloaded transitions don't flash
     if (this._overlayTimeout) clearTimeout(this._overlayTimeout);
     this._overlayTimeout = setTimeout(() => {
       if (this.state === 'speaking') {
         this._showOverlay('Loading next question...');
       }
-    }, 500);
+    }, 600);
 
-    // Keep idle visible as a backdrop while question video buffers
+    // Keep idle/blink loop visible as a backdrop while question video buffers
     this.elError.classList.add('hidden');
     this.elError.style.zIndex = 1;
-    this.elQuestion.classList.add('hidden'); // hidden until ready
-    this.elQuestion.style.zIndex = 1;
 
-    // Start idle loop if not already running
+    // Keep idle loop active and visible until next video is ready
     if (idleSrc && this.elIdle.src !== idleSrc) {
       this.elIdle.src = idleSrc;
       this.elIdle.load();
@@ -137,38 +169,59 @@ class VideoEngine {
       this.elIdle.play().catch(() => { });
     }
 
-    // Load the new question video
-    this.elQuestion.src = src;
-    this.elQuestion.currentTime = 0;
-    this.elQuestion.muted = !!muted;
-    this.elQuestion.load();
+    // Keep question behind idle loop until playback begins
+    this.elQuestion.style.zIndex = 1;
+    this.elQuestion.classList.add('hidden');
 
-    // Safety timeout: if canplay never fires (bad file), wait max 5s then play anyway
+    // Load new question video if changed
+    if (this.elQuestion.src !== src) {
+      this.elQuestion.src = src;
+      this.elQuestion.currentTime = 0;
+      this.elQuestion.muted = !!muted;
+      this.elQuestion.load();
+    } else {
+      this.elQuestion.currentTime = 0;
+      this.elQuestion.muted = !!muted;
+    }
+
+    // Safety timeout: if canplay never fires, start playback after max 4s
     if (this._loadingTimeout) clearTimeout(this._loadingTimeout);
-    this._loadingTimeout = setTimeout(() => this._startPlayback(), 5000);
+    this._loadingTimeout = setTimeout(() => this._startPlayback(), 4000);
 
-    // Wait for enough data to play without stalling
-    this.elQuestion.addEventListener('canplay', () => this._startPlayback(), { once: true });
+    // If already sufficiently buffered, play immediately; otherwise wait for canplay
+    if (this.elQuestion.readyState >= 3) {
+      this._startPlayback();
+    } else {
+      this.elQuestion.addEventListener('canplay', () => this._startPlayback(), { once: true });
+    }
   }
 
   /** Internal: hide overlay and start playing the question video */
   _startPlayback() {
     if (this._loadingTimeout) { clearTimeout(this._loadingTimeout); this._loadingTimeout = null; }
     if (this._overlayTimeout) { clearTimeout(this._overlayTimeout); this._overlayTimeout = null; }
-    if (this.state !== 'speaking') return; // state changed before we started
+    if (this.state !== 'speaking') return;
 
     this._hideOverlay();
 
-    // Fade out idle, bring in question video
-    this.elIdle.style.zIndex = 1;
-    this.elIdle.classList.add('hidden');
+    // Bring question video to front and reveal
     this.elQuestion.style.zIndex = 2;
     this.elQuestion.classList.remove('hidden');
-
     this.elQuestion.muted = !!this.currentMuted;
+
     const playPromise = this.elQuestion.play();
     if (playPromise) {
-      playPromise.catch(() => {
+      const hideIdleWhenPlaying = () => {
+        if (this.state === 'speaking') {
+          this.elIdle.style.zIndex = 1;
+          this.elIdle.classList.add('hidden');
+        }
+      };
+      this.elQuestion.addEventListener('playing', hideIdleWhenPlaying, { once: true });
+      playPromise.then(() => {
+        // Fallback hide after play starts
+        setTimeout(hideIdleWhenPlaying, 50);
+      }).catch(() => {
         this._playAudioFallback();
       });
     }

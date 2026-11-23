@@ -30,6 +30,10 @@ async function getCSRF() {
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let currentQuestion = null;
+let nextQuestionData = null;
+let conditionalNextMap = null;
+let answerQueue = [];
+let isProcessingQueue = false;
 let selectedOption = null;
 let isLocked = false;
 let selectedLanguage = document.getElementById('langSelect')?.value || new URLSearchParams(window.location.search).get('lang') || 'en';
@@ -163,7 +167,7 @@ function localizeUI(ui) {
       `;
     }
     if (csThankYou) {
-      csThankYou.textContent = "Thank you for your time. Your application has been submitted successfully.";
+      csThankYou.textContent = "Thank you for completing your screening interview. Our team will review your responses and be in touch soon. Have a great day!";
     }
     return;
   }
@@ -407,7 +411,6 @@ async function init() {
 
 // ─── FETCH QUESTION ──────────────────────────────────────────────────────────
 async function fetchQuestion() {
-  const playbackId = ++currentPlaybackId;
   let data;
   try {
     const res = await api('/api/question/', { lang: selectedLanguage });
@@ -421,29 +424,55 @@ async function fetchQuestion() {
 
   if (data.done) {
     localizeUI(data.ui);
-  const langSelectEl = document.getElementById('langSelect');
-  if (langSelectEl) {
-    langSelectEl.value = selectedLanguage;
-    if (q.number > 1) {
-      langSelectEl.disabled = true;
-      langSelectEl.title = "Language is locked during the interview";
+    const langSelectEl = document.getElementById('langSelect');
+    if (langSelectEl) {
+      langSelectEl.value = selectedLanguage;
+      if (typeof currentQuestion !== 'undefined' && currentQuestion && currentQuestion.number > 1) {
+        langSelectEl.disabled = true;
+        langSelectEl.title = "Language is locked during the interview";
+      }
     }
-  }
-    await handleCompletion(data.completion_video, data.ui);
+    await handleCompletion(data.outro_video || data.completion_video, data.ui);
     return;
   }
-  if (playbackId !== currentPlaybackId) return;
+
+  await displayQuestion(data);
+}
+
+// ─── DISPLAY QUESTION ────────────────────────────────────────────────────────
+async function displayQuestion(data) {
+  const playbackId = ++currentPlaybackId;
 
   const q = data.question;
+  if (!q) return;
+
   if (data.debug) {
     console.log(`[DEBUG] Language: ${data.debug.language} | Question: ${data.debug.question_id} | Resolved File: ${data.debug.resolved_file} | Absolute Path: ${data.debug.absolute_path}`);
   }
-  videoEngine.preloadPair(q.question_video, q.next_question_video);
+
   currentQuestion = q;
   selectedOption = null;
 
-  localizeUI(data.ui);
-  setProgress(data.progress, q.number, q.total);
+  if (data.next_question) {
+    nextQuestionData = data.next_question;
+  }
+  if (data.conditional_next) {
+    conditionalNextMap = data.conditional_next;
+  }
+
+  // Preload only the NEXT question's video into the hidden preload element
+  if (nextQuestionData && nextQuestionData.question_video) {
+    videoEngine.preloadNext(nextQuestionData.question_video);
+  }
+  // Preload blink/idle and outro at start/as available
+  if (data.idle_video || data.outro_video) {
+    videoEngine.preloadGlobalAssets(data.idle_video, data.outro_video);
+  }
+
+  if (data.ui) localizeUI(data.ui);
+  if (data.progress !== undefined && data.progress !== null) {
+    setProgress(data.progress, q.number, q.total);
+  }
   setSpeakingOverlay(true, 'Sarah is speaking...');
   lockInput(true);
 
@@ -458,7 +487,6 @@ async function fetchQuestion() {
     preloadedAudio.load();
   }
 
-  await sleep(1000); // A little gap between videos
   if (playbackId !== currentPlaybackId) return;
 
   const shouldMuteVideo = (selectedLanguage !== 'en');
@@ -541,6 +569,26 @@ function renderInput(q) {
         inpText.value = '';
         hideError();
         updateActionIcon();
+
+        // Branch-aware preloading on option click
+        if (conditionalNextMap) {
+          if (q.id === 10) {
+            const isFresher = opt.toLowerCase().includes('fresher') || opt.toLowerCase().includes('no');
+            const target = isFresher ? conditionalNextMap['fresher'] : conditionalNextMap['experienced'];
+            if (target && target.question_video) {
+              nextQuestionData = target;
+              videoEngine.preloadNext(target.question_video);
+            }
+          } else if (q.id === 21) {
+            const isNo = opt.toLowerCase().startsWith('no');
+            const target = isNo ? conditionalNextMap['no'] : conditionalNextMap['yes'];
+            if (target) {
+              nextQuestionData = target;
+              if (target.outro_video) videoEngine.preloadNext(target.outro_video);
+              else if (target.question_video) videoEngine.preloadNext(target.question_video);
+            }
+          }
+        }
       };
       inpOpts.appendChild(btn);
     });
@@ -582,13 +630,127 @@ function renderInput(q) {
   updateActionIcon();
 }
 
+// ─── ANSWER QUEUE ─────────────────────────────────────────────────────────────
+async function processAnswerQueue() {
+  if (isProcessingQueue) return;
+  isProcessingQueue = true;
+
+  while (true) {
+    const item = answerQueue.find(i => i.status === 'pending');
+    if (!item) break;
+
+    item.status = 'sending';
+    const statusText = document.getElementById('soText');
+    if (statusText) statusText.textContent = 'Saving your answer...';
+
+    let data;
+    try {
+      const res = await api('/api/answer/', {
+        question_id: item.question.id,
+        value: item.value,
+        lang: item.lang
+      });
+      data = await res.json();
+    } catch (err) {
+      console.error('Submit error:', err);
+      data = { valid: false, network_error: true, error: 'Network error. Please check your connection and try again.' };
+    }
+
+    if (data.valid) {
+      item.status = 'confirmed';
+      if (statusText) statusText.textContent = data.done ? 'Interview finished.' : 'Answer saved.';
+      if (data.ui) localizeUI(data.ui);
+      if (data.progress !== undefined && data.progress !== null) {
+        setProgress(data.progress);
+      }
+      if (data.next_question) {
+        nextQuestionData = data.next_question;
+        if (nextQuestionData.question_video) {
+          videoEngine.preloadNext(nextQuestionData.question_video);
+        }
+      }
+      if (data.conditional_next) {
+        conditionalNextMap = data.conditional_next;
+      }
+    } else {
+      item.status = 'failed';
+      item.errorData = data;
+      isProcessingQueue = false;
+      await handleAnswerFailure(item);
+      return;
+    }
+  }
+
+  isProcessingQueue = false;
+}
+
+async function handleAnswerFailure(item) {
+  currentPlaybackId++;
+  videoEngine.pause();
+  cancelTTS();
+
+  const answeringQuestion = item.question;
+  currentQuestion = answeringQuestion;
+  const data = item.errorData;
+
+  const idx = answerQueue.indexOf(item);
+  if (idx !== -1) answerQueue.splice(idx, 1);
+
+  const statusText = document.getElementById('soText');
+  if (statusText) statusText.textContent = data.network_error ? 'Connection error.' : 'Invalid answer.';
+
+  if (data.skipped) {
+    showError(data.error_text || data.error || 'Question skipped.');
+    setProgress(data.progress);
+    if (data.done) {
+      localizeUI(data.ui);
+      await handleCompletion(data.outro_video || data.completion_video, data.ui);
+      return;
+    }
+    isLocked = false;
+    await fetchQuestion();
+    return;
+  }
+
+  const errVideo = data.error_video_url || data.error_video;
+  showError(data.error_text || data.error || 'Invalid input. Please try again.');
+
+  if (data.retryable || data.network_error) {
+    renderInput(answeringQuestion);
+    lockInput(false);
+    isLocked = false;
+    return;
+  }
+
+  if (errVideo) {
+    const shouldMuteVideo = (selectedLanguage !== 'en');
+    videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
+
+    if (selectedLanguage !== 'en' && ttsEnabled) {
+      await sleep(300);
+      speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
+      await waitForAudio(currentAudio);
+    } else {
+      const waitMs = await getVideoWaitTime(errVideo);
+      await sleep(waitMs + 500);
+    }
+  } else {
+    if (ttsEnabled) {
+      speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
+      await waitForAudio(currentAudio);
+    } else {
+      await sleep(600);
+    }
+  }
+
+  renderInput(answeringQuestion);
+  lockInput(false);
+  isLocked = false;
+}
+
 // ─── SUBMIT ───────────────────────────────────────────────────────────────────
 async function handleSubmit() {
   if (isLocked || !currentQuestion) return;
-  currentPlaybackId++;
-  cancelTTS();
-  if (isRecording) stopRecording();
-  isLocked = true;
 
   let value = '';
   const qtype = currentQuestion.type;
@@ -617,123 +779,139 @@ async function handleSubmit() {
     }
   }
 
+  // Check required / empty
+  if (!value && !currentQuestion.optional) {
+    showError('Please provide an answer.');
+    lockInput(false);
+    isLocked = false;
+    return;
+  }
+
+  if (isRecording) stopRecording();
+  isLocked = true;
   lockInput(true);
   hideError();
-  const statusText = document.getElementById('soText');
-  if (statusText) statusText.textContent = 'Saving your answer...';
 
-  let data;
-  try {
-    const res = await api('/api/answer/', { question_id: currentQuestion.id, value, lang: selectedLanguage });
-    data = await res.json();
-  } catch (e) {
-    console.error('Submit error:', e);
-    showError('Network error. Please check your connection and try again.');
-    if (statusText) statusText.textContent = 'There was a connection error.';
-    renderInput(currentQuestion);
-    lockInput(false);
-    isLocked = false;
-    return;
+  const answeringQuestion = currentQuestion;
+
+  // Queue answer and send in background in order
+  const queueItem = {
+    question: answeringQuestion,
+    value: value,
+    lang: selectedLanguage,
+    status: 'pending',
+    errorData: null
+  };
+  answerQueue.push(queueItem);
+
+  // Trigger background queue processing without awaiting
+  processAnswerQueue();
+
+  // Compute next question before starting transition
+  let targetNext = nextQuestionData;
+  if (conditionalNextMap) {
+    if (answeringQuestion.id === 10) {
+      const isFresher = (selectedOption && (selectedOption.toLowerCase().includes('fresher') || selectedOption.toLowerCase().includes('no'))) ||
+                        (value && (value.toLowerCase().includes('fresher') || value.toLowerCase().includes('no')));
+      targetNext = isFresher ? conditionalNextMap['fresher'] : conditionalNextMap['experienced'];
+    } else if (answeringQuestion.id === 21) {
+      const isNo = (selectedOption && selectedOption.toLowerCase().startsWith('no')) ||
+                   (value && value.toLowerCase().startsWith('no'));
+      targetNext = isNo ? conditionalNextMap['no'] : conditionalNextMap['yes'];
+    }
   }
 
-  if (!data.valid) {
-    if (data.skipped) {
-      showError(data.error_text || data.error || 'Question skipped.');
-      if (statusText) statusText.textContent = 'Question skipped.';
-      setProgress(data.progress);
-      if (data.done) {
-        localizeUI(data.ui);
-        await handleCompletion(data.completion_video, data.ui);
-        return;
-      }
-      isLocked = false;
-      await sleep(1000);
-      await fetchQuestion();
+  // Play next question IMMEDIATELY as answer is accepted locally
+  if (targetNext) {
+    if (targetNext.done) {
+      await handleCompletion(targetNext.outro_video, null);
       return;
     }
-
-    const errVideo = data.error_video_url || data.error_video;
-    showError(data.error_text || data.error || 'Invalid input. Please try again.');
-    if (data.retryable) {
-      lockInput(false);
-      isLocked = false;
-      return;
-    }
-    if (errVideo) {
-      const shouldMuteVideo = (selectedLanguage !== 'en');
-
-      videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
-
-      if (selectedLanguage !== 'en' && ttsEnabled) {
-        await sleep(300);
-        speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
-      }
-
-      if (selectedLanguage !== 'en' && ttsEnabled) {
-        await waitForAudio(currentAudio);
-      } else {
-        const waitMs = await getVideoWaitTime(errVideo);
-        await sleep(waitMs + 500);
-      }
-    } else {
-      if (ttsEnabled) {
-        speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
-        await waitForAudio(currentAudio);
-      } else {
-        await sleep(600);
-      }
-    }
-    renderInput(currentQuestion);
-    lockInput(false);
     isLocked = false;
-    return;
+    await displayQuestion({
+      question: targetNext,
+      next_question: null,
+      conditional_next: null,
+      ui: null,
+      progress: null,
+      idle_video: targetNext.idle_video,
+      outro_video: null
+    });
+  } else {
+    // If targetNext not yet computed, wait for this answer to be processed
+    while (queueItem.status === 'pending' || queueItem.status === 'sending') {
+      await sleep(50);
+    }
+    if (queueItem.status === 'failed') return;
+    isLocked = false;
+    await fetchQuestion();
   }
-
-  if (statusText) statusText.textContent = data.done ? 'Interview finished.' : 'Answer saved.';
-
-  setProgress(data.progress);
-  if (data.done) {
-    localizeUI(data.ui);
-    await handleCompletion(data.completion_video, data.ui);
-    return;
-  }
-  isLocked = false;
-  await fetchQuestion();
 }
 
+let completionHandled = false;
+
 // ─── COMPLETION ───────────────────────────────────────────────────────────────
-async function handleCompletion(completionVideoSrc, ui) {
+async function handleCompletion(outroVideoSrc, ui) {
+  if (completionHandled) return;
+  completionHandled = true;
   currentPlaybackId++;
   cancelTTS();
-  if (completionVideoSrc) {
-    await sleep(1000); // A little gap before completion video
-    const shouldMuteVideo = (selectedLanguage !== 'en');
-
-    videoEngine.playQuestion(completionVideoSrc, null, shouldMuteVideo);
-
-    if (selectedLanguage !== 'en' && ttsEnabled && ui && ui.thank_you) {
-      await sleep(300);
-      speakText(cleanHtml(ui.thank_you), selectedLanguage);
-    }
-
-    if (selectedLanguage !== 'en' && ttsEnabled) {
-      await waitForAudio(currentAudio);
-    } else {
-      const waitMs = await getVideoWaitTime(completionVideoSrc);
-      await sleep(waitMs);
-    }
-  }
-  videoEngine.stopAll();
-  setSpeakingOverlay(false);
+  lockInput(true);
+  if (questionEcho) questionEcho.style.display = 'none';
+  if (inputArea) inputArea.style.display = 'none';
   setProgress(100);
 
+  // Block "complete" until every queued answer has been confirmed:
+  const completePromise = (async () => {
+    while (answerQueue.some(i => i.status === 'pending' || i.status === 'sending')) {
+      await sleep(100);
+    }
+    if (answerQueue.some(i => i.status === 'failed')) {
+      return { success: false, error: 'Could not save all interview answers.' };
+    }
+    try {
+      const res = await api('/api/complete/', {});
+      return await res.json();
+    } catch (e) {
+      console.error('Completion error:', e);
+      return { success: false, error: 'Connection error' };
+    }
+  })();
+
+  if (outroVideoSrc) {
+    // Play the chosen language's outro.mp4 once, with sound, on the final screen
+    videoEngine.playQuestion(outroVideoSrc, null, false);
+
+    const waitMs = await getVideoWaitTime(outroVideoSrc);
+    await new Promise(resolve => {
+      let finished = false;
+      const onEnd = () => {
+        if (!finished) {
+          finished = true;
+          videoEngine.elQuestion.removeEventListener('ended', onEnd);
+          resolve();
+        }
+      };
+      videoEngine.elQuestion.addEventListener('ended', onEnd, { once: true });
+      setTimeout(onEnd, Math.max(waitMs, 1000));
+    });
+  } else {
+    // If the chosen language has no outro.mp4: play NO video, show thank-you text, log warning
+    console.warn(`No outro video found for language ${selectedLanguage}; showing thank-you text only.`);
+  }
+
+  videoEngine.stopAll();
+  setSpeakingOverlay(false);
+
+  // Wait for background completion call (which waited for all queued answers to be confirmed)
   let data = {};
   try {
-    const res = await api('/api/complete/', {});
-    data = await res.json();
-  } catch (e) { console.error('Completion error:', e); }
+    data = await completePromise;
+  } catch (e) {
+    console.error('Completion error:', e);
+  }
 
-  if (data.success) {
+  if (data && data.success) {
     csMeta.replaceChildren();
     if (data.application_id !== undefined) {
       const row = document.createElement('div');
@@ -755,12 +933,17 @@ async function handleCompletion(completionVideoSrc, ui) {
     statusRow.append(statusLabel, statusValue);
     csMeta.appendChild(statusRow);
 
+    if (ui && ui.thank_you) {
+      const csThankYou = document.getElementById('csThankYou');
+      if (csThankYou) csThankYou.textContent = ui.thank_you;
+    }
+
     completionScreen.style.display = 'flex';
-    questionEcho.style.display = 'none';
-    inputArea.style.display = 'none';
-    lockInput(true);
   } else {
-    showError(data.error || 'Failed to submit interview. Please try again or contact the recruiter.');
+    // If completion fails after its retries, show the existing error message after the outro
+    completionHandled = false;
+    if (inputArea) inputArea.style.display = 'block';
+    showError((data && data.error) || 'Failed to submit interview. Please try again or contact the recruiter.');
     lockInput(false);
   }
 }

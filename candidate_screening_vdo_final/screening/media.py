@@ -161,6 +161,19 @@ def resolve_outro_media(lang_code):
     }
 
 
+def resolve_idle_media(lang_code='english'):
+    """Resolve the idle/waiting (blink) video URL with ?v=<mtime>."""
+    media_root = get_interview_media_root()
+    folder = LANGUAGE_FOLDER_MAP.get(lang_code.lower() if lang_code else '', 'english')
+    target = media_root / folder / 'idle_waiting.mp4'
+    if not target.exists() and folder != 'english':
+        target = media_root / 'english' / 'idle_waiting.mp4'
+    if target.exists() and target.is_file():
+        mtime = int(target.stat().st_mtime)
+        return f'/media/interview/{target.parent.name}/{target.name}?v={mtime}'
+    return '/media/interview/english/idle_waiting.mp4'
+
+
 def resolve_media(lang_code, media_name='outro'):
     """
     Manifest-based media resolver.
