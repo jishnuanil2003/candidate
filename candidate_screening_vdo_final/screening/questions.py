@@ -44,36 +44,60 @@ def get_current_kolkata_year_month():
     return now.year, now.month
 
 
+DATE_MIN_YEAR = 2000
+
+
+def get_max_date_year():
+    cur_year, _ = get_current_kolkata_year_month()
+    return cur_year + 1
+
+
+DATE_MAX_YEAR = get_max_date_year()
+
+
 def parse_month_year(value):
+    if not value or not isinstance(value, str):
+        return None, None
     val = value.strip().lower()
-    val = re.sub(r'[,/\-]', ' ', val)
-    tokens = val.split()
+    if not val:
+        return None, None
 
-    month = None
-    year = None
+    # Replace delimiters (commas, slashes, hyphens) with space
+    cleaned = re.sub(r'[,/\-]', ' ', val)
+    tokens = cleaned.split()
 
-    for t in tokens:
+    # Must contain exactly 2 tokens: one month and one 4-digit year
+    if len(tokens) != 2:
+        return None, None
+
+    t1, t2 = tokens[0], tokens[1]
+    max_year = get_max_date_year()
+
+    def _as_year(t):
+        if re.match(r'^\d{4}$', t):
+            y = int(t)
+            if DATE_MIN_YEAR <= y <= max_year:
+                return y
+        return None
+
+    def _as_month(t):
         if t in MONTH_MAP:
-            month = MONTH_MAP[t]
-        elif t.isdigit():
-            num = int(t)
-            if 1900 <= num <= 2100:
-                year = num
-            elif 1 <= num <= 12 and month is None:
-                month = num
+            return MONTH_MAP[t]
+        if re.match(r'^(0?[1-9]|1[0-2])$', t):
+            return int(t)
+        return None
 
-    if not (month and year):
-        m = re.search(r'\b(0?[1-9]|1[0-2])\s+(20\d\d)\b', val)
-        if m:
-            month = int(m.group(1))
-            year = int(m.group(2))
-        else:
-            m = re.search(r'\b(20\d\d)\s+(0?[1-9]|1[0-2])\b', val)
-            if m:
-                year = int(m.group(1))
-                month = int(m.group(2))
+    # Case 1: [month, year] e.g. "June 2025", "06 2025"
+    m1, y2 = _as_month(t1), _as_year(t2)
+    if m1 and y2:
+        return m1, y2
 
-    return month, year
+    # Case 2: [year, month] e.g. "2025 06", "2025 June"
+    y1, m2 = _as_year(t1), _as_month(t2)
+    if y1 and m2:
+        return m2, y1
+
+    return None, None
 
 
 class ValidationResult(tuple):
@@ -349,13 +373,13 @@ QUESTION_LOOKUP = {
     22: {'id': 22, 'key': 'internship_start_date', 'field': 'internship_start_date', 'translation_key': 'internship_start_date',
          'question_video': 'q22.mp4', 'error_video': 'internship_start_date_error.mp4',
          'question': 'When did your internship <strong>start</strong>? Please provide the month and year.', 'type': 'text',
-         'placeholder': 'e.g. June 2025', 'hint': 'Enter month and year',
+         'placeholder': 'Enter the month and year, for example: June 2025', 'hint': 'Enter the month and year, for example: June 2025',
          'condition': {'field': 'internship_done', 'value': 'Yes'},
          'validator': validate_internship_start_date},
     23: {'id': 23, 'key': 'internship_end_date', 'field': 'internship_end_date', 'translation_key': 'internship_end_date',
          'question_video': 'q23.mp4', 'error_video': 'internship_end_date_error.mp4',
          'question': 'When did your internship <strong>end</strong>, or is it still ongoing?', 'type': 'text',
-         'placeholder': 'e.g. August 2025 or Ongoing', 'hint': 'Enter month and year, or Ongoing',
+         'placeholder': 'Enter the month and year, or Ongoing, for example: August 2025', 'hint': 'Enter the month and year, or Ongoing, for example: August 2025',
          'condition': {'field': 'internship_done', 'value': 'Yes'},
          'validator': validate_internship_end_date},
     24: {'id': 24, 'key': 'internship_topic', 'field': 'internship_topic', 'translation_key': 'internship_topic',

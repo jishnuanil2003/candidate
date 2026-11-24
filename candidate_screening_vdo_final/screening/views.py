@@ -17,8 +17,8 @@ from .questions import (QUESTION_LOOKUP, QUESTIONS, NO_QUESTIONS_MESSAGE, build_
                         get_dmcore_active_questions, validate_answer, get_active_questions,
                         is_empty_or_filler, ValidationResult)
 from .forms import HRSignupForm, HRLoginForm
-from .translations import TRANSLATIONS, map_option_to_canonical_english, get_error_text, ADDENDUM_ERROR_TEXTS
-from .media import resolve_question_media, resolve_error_media, serve_interview_media, resolve_outro_media, resolve_idle_media, MEDIA_MANIFEST
+from .translations import TRANSLATIONS, map_option_to_canonical_english, get_error_text, ADDENDUM_ERROR_TEXTS, get_question_hint, QUESTION_HINTS
+from .media import resolve_question_media, resolve_error_media, serve_interview_media, resolve_outro_media, resolve_idle_media, MEDIA_MANIFEST, resolve_media
 
 SUPPORTED_LANGUAGES = {'en', 'ml', 'hi', 'ta', 'te'}
 ENABLED_INTERVIEW_LANGUAGES = set(getattr(settings, 'ENABLED_INTERVIEW_LANGUAGES', ['en', 'ml', 'hi', 'ta', 'te']))
@@ -664,7 +664,7 @@ def build_question_payload(q_index, active_qs, lang):
             'options': next_tr.get('options', []),
             'other_label': next_tr.get('other_label', ''),
             'placeholder': next_tr.get('placeholder', ''),
-            'hint': next_tr.get('hint', ''),
+            'hint': get_question_hint(next_tr['id'], lang) or next_tr.get('hint', ''),
             'optional': next_tr.get('optional', False),
             'number': q_index + 2,
             'total': total,
@@ -690,7 +690,7 @@ def build_question_payload(q_index, active_qs, lang):
                 'options': tr14.get('options', []),
                 'other_label': tr14.get('other_label', ''),
                 'placeholder': tr14.get('placeholder', ''),
-                'hint': tr14.get('hint', ''),
+                'hint': get_question_hint(14, lang) or tr14.get('hint', ''),
                 'optional': tr14.get('optional', False),
                 'number': 14,
                 'total': total,
@@ -710,7 +710,7 @@ def build_question_payload(q_index, active_qs, lang):
                 'options': tr11.get('options', []),
                 'other_label': tr11.get('other_label', ''),
                 'placeholder': tr11.get('placeholder', ''),
-                'hint': tr11.get('hint', ''),
+                'hint': get_question_hint(11, lang) or tr11.get('hint', ''),
                 'optional': tr11.get('optional', False),
                 'number': 11,
                 'total': total,
@@ -733,7 +733,7 @@ def build_question_payload(q_index, active_qs, lang):
                 'options': tr22.get('options', []),
                 'other_label': tr22.get('other_label', ''),
                 'placeholder': tr22.get('placeholder', ''),
-                'hint': tr22.get('hint', ''),
+                'hint': get_question_hint(22, lang) or tr22.get('hint', ''),
                 'optional': tr22.get('optional', False),
                 'number': 22,
                 'total': total,
@@ -761,7 +761,7 @@ def build_question_payload(q_index, active_qs, lang):
             'options': translated.get('options', []),
             'other_label': translated.get('other_label', ''),
             'placeholder': translated.get('placeholder', ''),
-            'hint': translated.get('hint', ''),
+            'hint': get_question_hint(translated['id'], lang) or translated.get('hint', ''),
             'optional': translated.get('optional', False),
             'number': q_index + 1,
             'total': total,
@@ -883,25 +883,19 @@ def submit_answer(request):
                         if not addendum_text and lang != 'en':
                             lang_data = TRANSLATIONS.get(lang, {})
                             error_msg = lang_data.get('errors', {}).get('english_only', error_msg)
-                        error_media = resolve_error_media(lang, q.get('key', ''), reason='invalid', legacy_error_video=q.get('error_video', ''))
+                        error_media = resolve_media(lang, 'invalid_input')
                         error_video_url = error_media['url'] if error_media else None
+                        hint_text = get_question_hint(q['id'], lang)
 
-                        return JsonResponse({  # first
+                        return JsonResponse({
                             'valid': False,
                             'reason': 'invalid',
                             'error': error_msg,
                             'error_text': error_msg,
                             'error_video_url': error_video_url,
                             'error_video': error_video_url,
-                            'idle_video': '/media/interview/english/idle_waiting.mp4'
-                        })
-
-
-                        return JsonResponse({  # first
-                            'valid': False,
-                            'error': error_msg,
-                            'error_video': error_video_url,
-                            'idle_video': '/media/interview/english/idle_waiting.mp4'
+                            'idle_video': resolve_idle_media(lang),
+                            'hint': hint_text
                         })
             
         # Option mapping & numeric/email normalization
@@ -977,8 +971,12 @@ def submit_answer(request):
                         cache[cache_key] = error_msg_translated
                         save_translation_cache(request, cache)
                     
-            error_media = resolve_error_media(lang, q.get('key', ''), reason=reason, legacy_error_video=q.get('error_video', ''))
+            if reason == 'invalid':
+                error_media = resolve_media(lang, 'invalid_input')
+            else:
+                error_media = resolve_error_media(lang, q.get('key', ''), reason=reason, legacy_error_video=q.get('error_video', ''))
             error_video_url = error_media['url'] if error_media else None
+            hint_text = get_question_hint(q['id'], lang)
 
             if attempts_left <= 0:
                 logger.warning('Question %s failed %s validation attempts; skipping question without saving.', q['id'], MAX_INVALID_ATTEMPTS)
@@ -1011,16 +1009,25 @@ def submit_answer(request):
                     'progress': int((new_index / total) * 100) if total else 100,
                     'outro_video': outro_url,
                     'completion_video': outro_url,
-                    'ui': TRANSLATIONS.get(lang, {}).get('ui', {})
+                    'ui': TRANSLATIONS.get(lang, {}).get('ui', {}),
+                    'hint': hint_text
                 })
 
             invalid_attempts[q_id_str] = current_attempts
             request.session['invalid_attempts'] = invalid_attempts
             request.session.modified = True
 
-            return JsonResponse({'valid': False, 'reason': reason, 'error': error_msg_translated, 'error_text': error_msg_translated, 'error_video_url': error_video_url, 'attempts_left': attempts_left,
+            return JsonResponse({
+                'valid': False,
+                'reason': reason,
+                'error': error_msg_translated,
+                'error_text': error_msg_translated,
+                'error_video_url': error_video_url,
+                'attempts_left': attempts_left,
                 'error_video': error_video_url,
-                'idle_video': resolve_idle_media(lang)})
+                'idle_video': resolve_idle_media(lang),
+                'hint': hint_text
+            })
                 
         if token_mode:
             is_skipped_optional = q.get('optional', False) and not value_english.strip()

@@ -315,6 +315,39 @@ main { padding: 0; }
 .opt-pill.selected { border-color: #534AB7; background: rgba(83,74,183,.15); color: #9b86f8; font-weight: 500; }
 
 .inp-hint { font-size: 12px; color: #535f72; font-style: italic; margin-bottom: .5rem; }
+
+/* Short hint box on invalid answers */
+.iv-hint-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(44, 11, 9, 0.95);
+  border: 1px solid rgba(192, 57, 43, 0.6);
+  border-radius: 14px;
+  padding: 9px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #ff9e92;
+  margin-bottom: .6rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.25s ease-in-out;
+  z-index: 10;
+}
+.iv-hint-box svg {
+  width: 15px;
+  height: 15px;
+  stroke: #ff9e92;
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .iv-hint-box {
+    transition: none !important;
+    animation: none !important;
+  }
+}
 .inp-error {
   position: absolute; top: -10px; left: 1.25rem; right: 1.25rem; transform: translateY(-100%);
   display: flex; align-items: center; gap: 8px; background: rgba(44, 11, 9, 0.95);

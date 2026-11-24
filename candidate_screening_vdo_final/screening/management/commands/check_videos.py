@@ -20,6 +20,7 @@ LANGUAGES = ['english', 'malayalam', 'hindi', 'tamil', 'telugu']
 QUESTION_IDS = list(range(1, 25))  # 1 to 24
 
 ERROR_VIDEOS = [
+    ('invalid_input', []),
     ('lead_source_invalid', []),
     ('lead_source_empty', []),
     ('location_invalid', []),

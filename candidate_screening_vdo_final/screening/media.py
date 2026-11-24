@@ -25,9 +25,10 @@ ALLOWED_LANGUAGES = {'english', 'malayalam', 'hindi', 'tamil', 'telugu'}
 
 MEDIA_MANIFEST = {
     'outro': 'outro.mp4',
+    'invalid_input': 'invalid_input.mp4',
 }
 
-FILENAME_PATTERN = re.compile(r'^(q_?([1-9]|1[0-9]|2[0-4])|idle_waiting|outro|q_complete|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
+FILENAME_PATTERN = re.compile(r'^(q_?([1-9]|1[0-9]|2[0-4])|idle_waiting|outro|q_complete|invalid_input|error_[a-z0-9_]+|[a-z0-9_]+_(error|empty|invalid|before_start))\.(mp4|webm)$')
 
 
 def get_interview_media_root():
@@ -174,12 +175,61 @@ def resolve_idle_media(lang_code='english'):
     return '/media/interview/english/idle_waiting.mp4'
 
 
+def resolve_invalid_input_media(lang_code):
+    """
+    Resolve the shared invalid_input video file for the chosen language.
+    Lookup order:
+      1. chosen language file: interview_media/<language>/invalid_input.mp4 (or .webm)
+      2. english fallback (if chosen language is not english): interview_media/english/invalid_input.mp4
+      3. None (no legacy fallback, no per-field fallback).
+    """
+    media_root = get_interview_media_root()
+    folder = LANGUAGE_FOLDER_MAP.get(lang_code.lower() if lang_code else '', 'english')
+    if folder not in ALLOWED_LANGUAGES:
+        folder = 'english'
+
+    manifest_file = MEDIA_MANIFEST.get('invalid_input', 'invalid_input.mp4')
+    stem = manifest_file.rsplit('.', 1)[0]
+
+    def _find_file(target_folder):
+        t_dir = media_root / target_folder
+        for ext in ('mp4', 'webm'):
+            cand = t_dir / f"{stem}.{ext}"
+            if cand.exists() and cand.is_file():
+                mtime = int(cand.stat().st_mtime)
+                return {
+                    'url': f'/media/interview/{target_folder}/{cand.name}?v={mtime}',
+                    'is_fallback': (target_folder == 'english' and folder != 'english'),
+                    'lang_folder': target_folder,
+                    'filename': cand.name,
+                    'file_path': cand,
+                    'absolute_path': str(cand.resolve()),
+                }
+        return None
+
+    # 1. Chosen language
+    res = _find_file(folder)
+    if res:
+        return res
+
+    # 2. English fallback (if not already english)
+    if folder != 'english':
+        res = _find_file('english')
+        if res:
+            return res
+
+    # 3. None - do not fall back to per-field or legacy
+    return None
+
+
 def resolve_media(lang_code, media_name='outro'):
     """
     Manifest-based media resolver.
     """
     if media_name == 'outro':
         return resolve_outro_media(lang_code)
+    if media_name == 'invalid_input':
+        return resolve_invalid_input_media(lang_code)
     media_root = get_interview_media_root()
     folder = LANGUAGE_FOLDER_MAP.get(lang_code.lower() if lang_code else '', 'english')
     manifest_filename = MEDIA_MANIFEST.get(media_name)

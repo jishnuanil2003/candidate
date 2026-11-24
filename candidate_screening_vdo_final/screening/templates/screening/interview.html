@@ -2,7 +2,7 @@
 {% load static %}
 {% block title %}AI Interview – TalentBot{% endblock %}
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'screening/css/interview.css' %}?v=4">
+<link rel="stylesheet" href="{% static 'screening/css/interview.css' %}?v=20261124">
 <style>
 .navbar{display:none}
 main{padding:0;min-height:0}
@@ -139,6 +139,10 @@ main{padding:0;min-height:0}
 
       <div class="inp-opts" id="inpOpts" style="display:none"></div>
       <div class="inp-hint" id="inpHint"></div>
+      <div class="iv-hint-box" id="ivHintBox" role="alert" aria-live="assertive" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="ivHintBoxText"></span>
+      </div>
       <div class="inp-error" id="inpError" style="display:none">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span id="inpErrorText"></span>
@@ -255,6 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (ta && cc) ta.addEventListener('input', () => { cc.textContent = ta.value.length + ' / 500'; });
 });
 </script>
-<script src="{% static 'screening/js/videoEngine.js' %}?v=20261123"></script>
-<script src="{% static 'screening/js/interview_v2.js' %}?v=20261123"></script>
+<script src="{% static 'screening/js/videoEngine.js' %}?v=20261124"></script>
+<script src="{% static 'screening/js/interview_v2.js' %}?v=20261124"></script>
 {% endblock %}

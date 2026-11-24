@@ -285,12 +285,23 @@ class VideoEngine {
     this.elIdle.style.zIndex = 1;
     this.elIdle.classList.add('hidden');
 
+    this.elError.loop = false;
     this.elError.src = errorSrc;
     this.elError.style.zIndex = 2;
     this.elError.classList.remove('hidden');
     this.elError.currentTime = 0;
     this.elError.muted = !!muted;
     this.elError.play().catch(() => { });
+  }
+
+  /** Safely pause all active video/audio playback */
+  pause() {
+    if (this._loadingTimeout) { clearTimeout(this._loadingTimeout); this._loadingTimeout = null; }
+    if (this._overlayTimeout) { clearTimeout(this._overlayTimeout); this._overlayTimeout = null; }
+    if (this.elQuestion) this.elQuestion.pause();
+    if (this.elError) this.elError.pause();
+    if (this.elIdle) this.elIdle.pause();
+    if (this._fallbackAudio) { this._fallbackAudio.pause(); this._fallbackAudio = null; }
   }
 
   /** Replay the last question video */

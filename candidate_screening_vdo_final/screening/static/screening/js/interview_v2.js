@@ -387,8 +387,121 @@ function handleWaAction() {
   else startRecording();
 }
 
-if (inpText) inpText.addEventListener('input', updateActionIcon);
-if (inpTextarea) inpTextarea.addEventListener('input', updateActionIcon);
+// ─── Question Hints & Month-Year Validator ────────────────────────────────────
+const QUESTION_HINTS = {
+  1: "Enter your full name, for example: Anil Kumar.",
+  2: "Enter a valid email address, for example: name@example.com.",
+  3: "Enter a 10-digit mobile number, for example: 9876543210.",
+  4: "Enter the role you are applying for, for example: Digital Marketing Executive.",
+  5: "Enter your highest qualification, for example: B.Tech, MCA or MBA.",
+  6: "Enter your field of study, for example: Computer Science.",
+  7: "Enter your college name.",
+  8: "Enter the 4-digit year, for example: 2024.",
+  9: "Enter your CGPA or percentage, for example: 8.2 or 78%.",
+  10: "Select or enter whether you have experience, for example: Yes, I have experience or No, I am a fresher.",
+  11: "Enter your last company name, for example: Infosys or TCS.",
+  12: "Enter your previous job title, for example: Software Engineer or Analyst.",
+  13: "Select your total experience, for example: 1-2 years.",
+  14: "List your key skills separated by commas, for example: SEO, Google Ads, Excel.",
+  15: "Select your notice period, for example: Immediate joiner, 1 month or 2 months.",
+  16: "Select your expected annual salary range, for example: 3-5 LPA or 5-8 LPA.",
+  17: "Enter your LinkedIn profile link (e.g. https://linkedin.com/in/yourname), or leave blank to skip.",
+  18: "Write 2 or 3 sentences about why you are a good fit.",
+  19: "Tell us where you heard about this job, for example: LinkedIn, Naukri or a friend.",
+  20: "Enter your current city, for example: Kochi.",
+  21: "Select or enter Yes or No, for example: Yes.",
+  22: "Enter the month and year, for example: June 2025.",
+  23: "Enter the month and year, or Ongoing, for example: August 2025.",
+  24: "Enter your internship domain or project topic, for example: Web Development with Django."
+};
+
+const DATE_MIN_YEAR = 2000;
+
+function parseMonthYearClient(val) {
+  if (!val || typeof val !== 'string') return null;
+  const str = val.trim().toLowerCase();
+  if (!str) return null;
+
+  const cleaned = str.replace(/[,/\-]/g, ' ');
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length !== 2) return null;
+
+  const currentYear = new Date().getFullYear();
+  const maxYear = currentYear + 1;
+
+  const monthNames = {
+    'january': 1, 'jan': 1, 'february': 2, 'feb': 2, 'march': 3, 'mar': 3,
+    'april': 4, 'apr': 4, 'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
+    'august': 8, 'aug': 8, 'september': 9, 'sep': 9, 'sept': 9, 'october': 10, 'oct': 10,
+    'november': 11, 'nov': 11, 'december': 12, 'dec': 12,
+    'जनवरी': 1, 'फ़रवरी': 2, 'फरवरी': 2, 'मार्च': 3, 'अप्रैल': 4, 'मई': 5, 'जून': 6,
+    'जुलाई': 7, 'अगस्त': 8, 'सितंबर': 9, 'सितम्बर': 9, 'अक्टूबर': 10, 'अक्तूबर': 10,
+    'नवंबर': 11, 'नवम्बर': 11, 'दिसंबर': 12, 'दिसम्बर': 12,
+    'ജനുവരി': 1, 'ഫെബ്രുവരി': 2, 'മാർച്ച്': 3, 'ഏപ്രിൽ': 4, 'മെയ്': 5, 'ജൂൺ': 6,
+    'ജൂലൈ': 7, 'ഓഗസ്റ്റ്': 8, 'സെപ്റ്റംബർ': 9, 'ഒക്ടോബർ': 10, 'നവംബർ': 11, 'ഡിസംബർ': 12,
+    'ஜனவரி': 1, 'பிப்ரவரி': 2, 'மார்ச்': 3, 'ஏப்ரல்': 4, 'மே': 5, 'ஜூன்': 6,
+    'ஜூலை': 7, 'ஆகஸ்ட்': 8, 'செப்டம்பர்': 9, 'அக்டோபர்': 10, 'நவம்பர்': 11, 'டிசம்பர்': 12,
+    'జనవరి': 1, 'ఫిబ్రవరి': 2, 'మార్చి': 3, 'ఏప్రిల్': 4, 'మే': 5, 'జూన్': 6,
+    'జూలై': 7, 'ఆగస్టు': 8, 'సెప్టెంబర్': 9, 'అక్టోబర్': 10, 'నవంబర్': 11, 'డిసెంబర్': 12
+  };
+
+  function asYear(t) {
+    if (/^\d{4}$/.test(t)) {
+      const y = parseInt(t, 10);
+      if (y >= DATE_MIN_YEAR && y <= maxYear) return y;
+    }
+    return null;
+  }
+
+  function asMonth(t) {
+    if (monthNames[t]) return monthNames[t];
+    if (/^(0?[1-9]|1[0-2])$/.test(t)) return parseInt(t, 10);
+    return null;
+  }
+
+  const [t1, t2] = tokens;
+  const m1 = asMonth(t1), y2 = asYear(t2);
+  if (m1 && y2) return { month: m1, year: y2 };
+
+  const y1 = asYear(t1), m2 = asMonth(t2);
+  if (y1 && m2) return { month: m2, year: y1 };
+
+  return null;
+}
+
+function showHintBox(hintText) {
+  const box = document.getElementById('ivHintBox');
+  const span = document.getElementById('ivHintBoxText');
+  if (!box || !span) return;
+  const msg = hintText || "Please enter a valid input.";
+  span.textContent = "Invalid input. " + msg;
+  box.style.display = 'flex';
+  box.style.opacity = '1';
+}
+
+function hideHintBox() {
+  const box = document.getElementById('ivHintBox');
+  if (!box) return;
+  box.style.opacity = '0';
+  setTimeout(() => {
+    if (box.style.opacity === '0') box.style.display = 'none';
+  }, 250);
+}
+
+if (inpText) {
+  inpText.addEventListener('input', () => {
+    hideHintBox();
+    hideError();
+    updateActionIcon();
+  });
+}
+if (inpTextarea) {
+  inpTextarea.addEventListener('input', () => {
+    hideHintBox();
+    hideError();
+    updateActionIcon();
+  });
+}
 
 // Fallback delay when video has no duration (placeholder files)
 const FALLBACK_DELAY_MS = 0;
@@ -452,6 +565,8 @@ async function displayQuestion(data) {
 
   currentQuestion = q;
   selectedOption = null;
+  hideHintBox();
+  hideError();
 
   if (data.next_question) {
     nextQuestionData = data.next_question;
@@ -623,7 +738,15 @@ function renderInput(q) {
   } else {
     inpText.style.display = 'block';
     inpText.value = '';
-    inpText.placeholder = q.placeholder || '';
+    const isDateQ = (q.id === 22 || q.id === 23 || q.key === 'internship_start_date' || q.key === 'internship_end_date');
+    if (isDateQ) {
+      const hintStr = q.hint || QUESTION_HINTS[q.id] || (q.id === 22 ? 'Enter the month and year, for example: June 2025.' : 'Enter the month and year, or Ongoing, for example: August 2025.');
+      inpHint.textContent = hintStr;
+      inpHint.style.display = 'block';
+      inpText.placeholder = hintStr;
+    } else {
+      inpText.placeholder = q.placeholder || '';
+    }
     inpText.type = q.type === 'email' ? 'email' : 'text';
     setTimeout(() => inpText.focus(), 100);
   }
@@ -686,12 +809,10 @@ async function processAnswerQueue() {
 
 async function handleAnswerFailure(item) {
   currentPlaybackId++;
-  videoEngine.pause();
   cancelTTS();
 
   const answeringQuestion = item.question;
-  currentQuestion = answeringQuestion;
-  const data = item.errorData;
+  const data = item.errorData || {};
 
   const idx = answerQueue.indexOf(item);
   if (idx !== -1) answerQueue.splice(idx, 1);
@@ -700,6 +821,7 @@ async function handleAnswerFailure(item) {
   if (statusText) statusText.textContent = data.network_error ? 'Connection error.' : 'Invalid answer.';
 
   if (data.skipped) {
+    hideHintBox();
     showError(data.error_text || data.error || 'Question skipped.');
     setProgress(data.progress);
     if (data.done) {
@@ -712,40 +834,96 @@ async function handleAnswerFailure(item) {
     return;
   }
 
-  const errVideo = data.error_video_url || data.error_video;
-  showError(data.error_text || data.error || 'Invalid input. Please try again.');
+  // 1. ROLLBACK OPTIMISTIC TRANSITION: stop next question's video
+  videoEngine.stopAll();
 
-  if (data.retryable || data.network_error) {
-    renderInput(answeringQuestion);
+  // 2. Restore CURRENT question (number, text, options)
+  currentQuestion = answeringQuestion;
+  selectedOption = null;
+  const qeNum = document.getElementById('qeNum');
+  const qeText = document.getElementById('qeText');
+  if (qeNum) qeNum.textContent = `Question ${answeringQuestion.number} of ${answeringQuestion.total}`;
+  if (qeText) qeText.innerHTML = cleanHtml(answeringQuestion.text);
+
+  // 3. Clear input and re-render current question input
+  renderInput(answeringQuestion);
+  if (inpText) inpText.value = '';
+  if (inpTextarea) inpTextarea.value = '';
+  updateActionIcon();
+
+  const errVideo = data.error_video_url || data.error_video;
+  const qHint = data.hint || answeringQuestion.hint || QUESTION_HINTS[answeringQuestion.id] || 'Please enter a valid response.';
+
+  // Show the hint box at the moment invalid video starts (or immediately if video is missing)
+  showHintBox(qHint);
+
+  try {
+    if (errVideo) {
+      const shouldMuteVideo = (selectedLanguage !== 'en');
+      videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
+
+      // Play ONCE: loop must be false and no ended handler may replay it
+      if (videoEngine.elError) videoEngine.elError.loop = false;
+
+      // Wait until video ends, errors, or 15-second safety timeout
+      await new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (!settled) {
+            settled = true;
+            cleanup();
+            resolve();
+          }
+        };
+        const timer = setTimeout(finish, 15000); // 15-second safety timeout
+        const onEnd = () => finish();
+        const onErr = () => finish();
+        const cleanup = () => {
+          clearTimeout(timer);
+          if (videoEngine.elError) {
+            videoEngine.elError.removeEventListener('ended', onEnd);
+            videoEngine.elError.removeEventListener('error', onErr);
+          }
+        };
+        if (videoEngine.elError) {
+          videoEngine.elError.addEventListener('ended', onEnd, { once: true });
+          videoEngine.elError.addEventListener('error', onErr, { once: true });
+        } else {
+          finish();
+        }
+      });
+
+      if (selectedLanguage !== 'en' && ttsEnabled) {
+        speakText(cleanHtml(data.error_text || data.error || qHint), selectedLanguage);
+        await waitForAudio(currentAudio);
+      }
+    } else {
+      // If invalid_input.mp4 is missing for candidate's language:
+      // Do not fall back to per-field video and do not hang: show hint box text and continue.
+      if (selectedLanguage !== 'en' && ttsEnabled) {
+        speakText(cleanHtml(data.error_text || data.error || qHint), selectedLanguage);
+        await waitForAudio(currentAudio);
+      } else {
+        await sleep(400);
+      }
+    }
+  } catch (err) {
+    console.warn('Error during invalid answer flow:', err);
+  } finally {
+    // Return to waiting state (blink/idle loop)
+    videoEngine._switchToIdle();
+
+    // Re-enable input and Send button
     lockInput(false);
     isLocked = false;
-    return;
-  }
 
-  if (errVideo) {
-    const shouldMuteVideo = (selectedLanguage !== 'en');
-    videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
-
-    if (selectedLanguage !== 'en' && ttsEnabled) {
-      await sleep(300);
-      speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
-      await waitForAudio(currentAudio);
-    } else {
-      const waitMs = await getVideoWaitTime(errVideo);
-      await sleep(waitMs + 500);
-    }
-  } else {
-    if (ttsEnabled) {
-      speakText(cleanHtml(data.error_text || data.error), selectedLanguage);
-      await waitForAudio(currentAudio);
-    } else {
-      await sleep(600);
+    // Focus input
+    if (inpText && inpText.style.display !== 'none') {
+      inpText.focus();
+    } else if (inpTextarea && inpTextarea.style.display !== 'none') {
+      inpTextarea.focus();
     }
   }
-
-  renderInput(answeringQuestion);
-  lockInput(false);
-  isLocked = false;
 }
 
 // ─── SUBMIT ───────────────────────────────────────────────────────────────────
@@ -794,6 +972,24 @@ async function handleSubmit() {
 
   const answeringQuestion = currentQuestion;
 
+  // Client-side date validation check for internship date questions (22, 23)
+  const isDateQ = (answeringQuestion.id === 22 || answeringQuestion.id === 23 ||
+                   answeringQuestion.key === 'internship_start_date' || answeringQuestion.key === 'internship_end_date');
+  let isClientInvalidDate = false;
+  if (isDateQ && value) {
+    if (answeringQuestion.id === 23 || answeringQuestion.key === 'internship_end_date') {
+      const isOngoing = ['ongoing', 'still going on', 'present', 'currently', 'continuing', 'current', 'till now'].some(kw => value.toLowerCase().includes(kw)) ||
+                        ['തുടരുന്നു', 'चल रहा है', 'தொடர்கிறது', 'కొనసాగుతోంది'].some(kw => value.includes(kw));
+      if (!isOngoing && !parseMonthYearClient(value)) {
+        isClientInvalidDate = true;
+      }
+    } else {
+      if (!parseMonthYearClient(value)) {
+        isClientInvalidDate = true;
+      }
+    }
+  }
+
   // Queue answer and send in background in order
   const queueItem = {
     question: answeringQuestion,
@@ -807,8 +1003,8 @@ async function handleSubmit() {
   // Trigger background queue processing without awaiting
   processAnswerQueue();
 
-  // Compute next question before starting transition
-  let targetNext = nextQuestionData;
+  // If client-side date validation failed, do not advance optimistically to next question
+  let targetNext = isClientInvalidDate ? null : nextQuestionData;
   if (conditionalNextMap) {
     if (answeringQuestion.id === 10) {
       const isFresher = (selectedOption && (selectedOption.toLowerCase().includes('fresher') || selectedOption.toLowerCase().includes('no'))) ||

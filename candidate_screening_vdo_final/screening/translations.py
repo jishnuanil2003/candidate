@@ -88,8 +88,47 @@ def get_error_text(field_key, reason, lang='en'):
         return ADDENDUM_ERROR_TEXTS[field_key][reason]
     return None
 
+
+QUESTION_HINTS = {
+    1: "Enter your full name, for example: Anil Kumar.",
+    2: "Enter a valid email address, for example: name@example.com.",
+    3: "Enter a 10-digit mobile number, for example: 9876543210.",
+    4: "Enter the role you are applying for, for example: Digital Marketing Executive.",
+    5: "Enter your highest qualification, for example: B.Tech, MCA or MBA.",
+    6: "Enter your field of study, for example: Computer Science.",
+    7: "Enter your college name.",
+    8: "Enter the 4-digit year, for example: 2024.",
+    9: "Enter your CGPA or percentage, for example: 8.2 or 78%.",
+    10: "Select or enter whether you have experience, for example: Yes, I have experience or No, I am a fresher.",
+    11: "Enter your last company name, for example: Infosys or TCS.",
+    12: "Enter your previous job title, for example: Software Engineer or Analyst.",
+    13: "Select your total experience, for example: 1-2 years.",
+    14: "List your key skills separated by commas, for example: SEO, Google Ads, Excel.",
+    15: "Select your notice period, for example: Immediate joiner, 1 month or 2 months.",
+    16: "Select your expected annual salary range, for example: 3-5 LPA or 5-8 LPA.",
+    17: "Enter your LinkedIn profile link (e.g. https://linkedin.com/in/yourname), or leave blank to skip.",
+    18: "Write 2 or 3 sentences about why you are a good fit.",
+    19: "Tell us where you heard about this job, for example: LinkedIn, Naukri or a friend.",
+    20: "Enter your current city, for example: Kochi.",
+    21: "Select or enter Yes or No, for example: Yes.",
+    22: "Enter the month and year, for example: June 2025.",
+    23: "Enter the month and year, or Ongoing, for example: August 2025.",
+    24: "Enter your internship domain or project topic, for example: Web Development with Django.",
+}
+
+
+def get_question_hint(qid, lang='en'):
+    if isinstance(qid, str) and qid.isdigit():
+        qid = int(qid)
+    lang_hints = TRANSLATIONS.get(lang, {}).get('hints', {})
+    if qid in lang_hints and lang_hints[qid]:
+        return lang_hints[qid]
+    return QUESTION_HINTS.get(qid, "")
+
+
 TRANSLATIONS = {
     "en": {
+        "hints": QUESTION_HINTS,
         "ui": {
             "begin_interview": "Begin Interview",
             "select_language": "Choose Language",
