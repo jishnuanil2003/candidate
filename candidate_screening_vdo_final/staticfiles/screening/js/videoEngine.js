@@ -248,9 +248,14 @@ class VideoEngine {
   /** Switch to looping idle video */
   _switchToIdle() {
     this.state = 'waiting';
+    if (this._errorResolve) {
+      const res = this._errorResolve;
+      this._errorResolve = null;
+      res();
+    }
     if (this._fallbackAudio) { this._fallbackAudio.pause(); this._fallbackAudio = null; }
-    this.elQuestion.pause();
-    this.elError.pause();
+    if (this.elQuestion) this.elQuestion.pause();
+    if (this.elError) this.elError.pause();
     this._setStatus('Waiting for your response...', true);
     this._setCaption('👂 Listening...');
     this.elGlow.classList.remove('active', 'error-glow');
@@ -270,7 +275,12 @@ class VideoEngine {
     }
   }
 
-  /** Play error video, then auto-return to idle */
+  /**
+   * Play error video in a video element that has already played with sound
+   * in this session (elQuestion), then auto-return to idle.
+   * Returns a Promise that resolves when playback ends, transitions to idle,
+   * errors, or reaches (duration + 2s) safety timeout.
+   */
   playError(errorSrc, idleSrc, muted) {
     this.currentIdleSrc = idleSrc;
     this.state = 'error';
@@ -280,18 +290,102 @@ class VideoEngine {
     this.elGlow.classList.remove('active');
     this.elGlow.classList.add('error-glow');
 
-    this.elQuestion.style.zIndex = 1;
-    this.elQuestion.classList.add('hidden');
-    this.elIdle.style.zIndex = 1;
-    this.elIdle.classList.add('hidden');
+    // Use elQuestion (already played with sound in this session, avoids iOS/Safari restrictions)
+    const vEl = this.elQuestion || this.elError;
+    if (this.elError && this.elError !== vEl) {
+      this.elError.pause();
+      this.elError.classList.add('hidden');
+    }
 
-    this.elError.loop = false;
-    this.elError.src = errorSrc;
-    this.elError.style.zIndex = 2;
-    this.elError.classList.remove('hidden');
-    this.elError.currentTime = 0;
-    this.elError.muted = !!muted;
-    this.elError.play().catch(() => { });
+    return new Promise(async (resolve) => {
+      let settled = false;
+      let safetyTimer = null;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (safetyTimer) clearTimeout(safetyTimer);
+        vEl.removeEventListener('ended', onEnded);
+        vEl.removeEventListener('error', onError);
+        vEl.removeEventListener('timeupdate', onTimeUpdate);
+        this._errorResolve = null;
+        this._switchToIdle();
+        resolve();
+      };
+
+      this._errorResolve = finish;
+
+      const onEnded = () => finish();
+      const onError = (e) => {
+        console.warn('Error video element encountered an error event:', e);
+        finish();
+      };
+      const onTimeUpdate = () => {
+        if (this.state === 'error' && vEl.duration) {
+          if (!safetyTimer) {
+            safetyTimer = setTimeout(finish, (vEl.duration + 2) * 1000);
+          }
+          if (vEl.duration - vEl.currentTime <= 0.35) {
+            finish();
+          }
+        }
+      };
+
+      vEl.addEventListener('ended', onEnded, { once: true });
+      vEl.addEventListener('error', onError, { once: true });
+      vEl.addEventListener('timeupdate', onTimeUpdate);
+
+      // Initial safety timeout in case metadata/duration never loads (max 5s)
+      safetyTimer = setTimeout(finish, 5000);
+
+      // Prepare video
+      vEl.loop = false;
+      vEl.src = errorSrc;
+      vEl.style.zIndex = 2;
+      vEl.classList.remove('hidden');
+      vEl.currentTime = 0;
+      vEl.load();
+
+      // Keep idle loop as backdrop until error video begins playing
+      if (idleSrc) {
+        if (this.elIdle.src !== idleSrc) this.elIdle.src = idleSrc;
+        this.elIdle.style.zIndex = 1;
+        this.elIdle.classList.remove('hidden');
+      }
+
+      // Try unmuted first (unless explicitly asked to mute)
+      vEl.muted = !!muted;
+      try {
+        await vEl.play();
+        if (this.elIdle) {
+          this.elIdle.style.zIndex = 1;
+          this.elIdle.classList.add('hidden');
+        }
+        if (vEl.duration && !isNaN(vEl.duration) && vEl.duration > 0) {
+          if (safetyTimer) clearTimeout(safetyTimer);
+          safetyTimer = setTimeout(finish, (vEl.duration + 2) * 1000);
+        }
+      } catch (playErr) {
+        console.warn('Unmuted playback of invalid video rejected by browser:', playErr);
+        // Fall back to muted playback so avatar animation is still visible
+        try {
+          vEl.muted = true;
+          await vEl.play();
+          console.log('Fell back to muted playback of invalid video.');
+          if (this.elIdle) {
+            this.elIdle.style.zIndex = 1;
+            this.elIdle.classList.add('hidden');
+          }
+          if (vEl.duration && !isNaN(vEl.duration) && vEl.duration > 0) {
+            if (safetyTimer) clearTimeout(safetyTimer);
+            safetyTimer = setTimeout(finish, (vEl.duration + 2) * 1000);
+          }
+        } catch (mutedErr) {
+          console.error('Muted playback of invalid video also failed:', mutedErr);
+          finish();
+        }
+      }
+    });
   }
 
   /** Safely pause all active video/audio playback */

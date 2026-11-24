@@ -111,8 +111,8 @@ QUESTION_HINTS = {
     19: "Tell us where you heard about this job, for example: LinkedIn, Naukri or a friend.",
     20: "Enter your current city, for example: Kochi.",
     21: "Select or enter Yes or No, for example: Yes.",
-    22: "Enter the month and year, for example: June 2025.",
-    23: "Enter the month and year, or Ongoing, for example: August 2025.",
+    22: "Enter the month and year, for example: June 2025 or 06/2025.",
+    23: "Enter the month and year, or Ongoing, for example: August 2025 or 08/2025.",
     24: "Enter your internship domain or project topic, for example: Web Development with Django.",
 }
 

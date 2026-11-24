@@ -410,8 +410,8 @@ const QUESTION_HINTS = {
   19: "Tell us where you heard about this job, for example: LinkedIn, Naukri or a friend.",
   20: "Enter your current city, for example: Kochi.",
   21: "Select or enter Yes or No, for example: Yes.",
-  22: "Enter the month and year, for example: June 2025.",
-  23: "Enter the month and year, or Ongoing, for example: August 2025.",
+  22: "Enter the month and year, for example: June 2025 or 06/2025.",
+  23: "Enter the month and year, or Ongoing, for example: August 2025 or 08/2025.",
   24: "Enter your internship domain or project topic, for example: Web Development with Django."
 };
 
@@ -514,6 +514,15 @@ async function init() {
   // Warm up CSRF before anything else
   await getCSRF();
 
+  if (rpStep && rpStep.textContent && rpStep.textContent.includes('/')) {
+    const parts = rpStep.textContent.split('/');
+    const n = parseInt(parts[0], 10);
+    const t = parseInt(parts[1], 10);
+    if (!isNaN(n) && !isNaN(t) && t > 0) {
+      updateProgressUI(n, t);
+    }
+  }
+
   setSpeakingOverlay(true, 'Starting your interview...');
   lockInput(true);
   await sleep(400);
@@ -585,13 +594,10 @@ async function displayQuestion(data) {
   }
 
   if (data.ui) localizeUI(data.ui);
-  if (data.progress !== undefined && data.progress !== null) {
-    setProgress(data.progress, q.number, q.total);
-  }
+  updateProgressUI(q.number, q.total, data.progress);
   setSpeakingOverlay(true, 'Sarah is speaking...');
   lockInput(true);
 
-  qeNum.textContent = `Question ${q.number} of ${q.total}`;
   qeText.textContent = cleanHtml(q.text);
 
   // Start preloading regional TTS in the background immediately
@@ -740,7 +746,7 @@ function renderInput(q) {
     inpText.value = '';
     const isDateQ = (q.id === 22 || q.id === 23 || q.key === 'internship_start_date' || q.key === 'internship_end_date');
     if (isDateQ) {
-      const hintStr = q.hint || QUESTION_HINTS[q.id] || (q.id === 22 ? 'Enter the month and year, for example: June 2025.' : 'Enter the month and year, or Ongoing, for example: August 2025.');
+      const hintStr = q.hint || QUESTION_HINTS[q.id] || (q.id === 22 ? 'Enter the month and year, for example: June 2025 or 06/2025.' : 'Enter the month and year, or Ongoing, for example: August 2025 or 08/2025.');
       inpHint.textContent = hintStr;
       inpHint.style.display = 'block';
       inpText.placeholder = hintStr;
@@ -783,8 +789,10 @@ async function processAnswerQueue() {
       item.status = 'confirmed';
       if (statusText) statusText.textContent = data.done ? 'Interview finished.' : 'Answer saved.';
       if (data.ui) localizeUI(data.ui);
-      if (data.progress !== undefined && data.progress !== null) {
-        setProgress(data.progress);
+      if (data.question) {
+        updateProgressUI(data.question.number, data.question.total, data.progress);
+      } else if (data.progress !== undefined && data.progress !== null) {
+        updateProgressUI(null, null, data.progress);
       }
       if (data.next_question) {
         nextQuestionData = data.next_question;
@@ -796,6 +804,16 @@ async function processAnswerQueue() {
         conditionalNextMap = data.conditional_next;
       }
     } else {
+      if (data.error === 'Question mismatch.' || (typeof data.error === 'string' && data.error.includes('mismatch'))) {
+        console.warn('Question mismatch detected. Resyncing question from server...');
+        const idx = answerQueue.indexOf(item);
+        if (idx !== -1) answerQueue.splice(idx, 1);
+        isProcessingQueue = false;
+        isLocked = false;
+        isSubmitting = false;
+        await fetchQuestion();
+        return;
+      }
       item.status = 'failed';
       item.errorData = data;
       isProcessingQueue = false;
@@ -823,26 +841,26 @@ async function handleAnswerFailure(item) {
   if (data.skipped) {
     hideHintBox();
     showError(data.error_text || data.error || 'Question skipped.');
-    setProgress(data.progress);
+    updateProgressUI(data.current_number, data.total, data.progress);
     if (data.done) {
       localizeUI(data.ui);
       await handleCompletion(data.outro_video || data.completion_video, data.ui);
       return;
     }
     isLocked = false;
+    isSubmitting = false;
     await fetchQuestion();
     return;
   }
 
-  // 1. ROLLBACK OPTIMISTIC TRANSITION: stop next question's video
-  videoEngine.stopAll();
+  // 1. ROLLBACK OPTIMISTIC TRANSITION: safely pause active playback
+  videoEngine.pause();
 
   // 2. Restore CURRENT question (number, text, options)
   currentQuestion = answeringQuestion;
   selectedOption = null;
-  const qeNum = document.getElementById('qeNum');
+  updateProgressUI(answeringQuestion.number, answeringQuestion.total, data.progress);
   const qeText = document.getElementById('qeText');
-  if (qeNum) qeNum.textContent = `Question ${answeringQuestion.number} of ${answeringQuestion.total}`;
   if (qeText) qeText.innerHTML = cleanHtml(answeringQuestion.text);
 
   // 3. Clear input and re-render current question input
@@ -860,38 +878,8 @@ async function handleAnswerFailure(item) {
   try {
     if (errVideo) {
       const shouldMuteVideo = (selectedLanguage !== 'en');
-      videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
-
-      // Play ONCE: loop must be false and no ended handler may replay it
-      if (videoEngine.elError) videoEngine.elError.loop = false;
-
-      // Wait until video ends, errors, or 15-second safety timeout
-      await new Promise((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (!settled) {
-            settled = true;
-            cleanup();
-            resolve();
-          }
-        };
-        const timer = setTimeout(finish, 15000); // 15-second safety timeout
-        const onEnd = () => finish();
-        const onErr = () => finish();
-        const cleanup = () => {
-          clearTimeout(timer);
-          if (videoEngine.elError) {
-            videoEngine.elError.removeEventListener('ended', onEnd);
-            videoEngine.elError.removeEventListener('error', onErr);
-          }
-        };
-        if (videoEngine.elError) {
-          videoEngine.elError.addEventListener('ended', onEnd, { once: true });
-          videoEngine.elError.addEventListener('error', onErr, { once: true });
-        } else {
-          finish();
-        }
-      });
+      // videoEngine.playError returns a Promise resolving on ended, switch to idle, error, or (duration + 2s)
+      await videoEngine.playError(errVideo, data.idle_video, shouldMuteVideo);
 
       if (selectedLanguage !== 'en' && ttsEnabled) {
         speakText(cleanHtml(data.error_text || data.error || qHint), selectedLanguage);
@@ -913,9 +901,10 @@ async function handleAnswerFailure(item) {
     // Return to waiting state (blink/idle loop)
     videoEngine._switchToIdle();
 
-    // Re-enable input and Send button
+    // Re-enable input and Send button immediately
     lockInput(false);
     isLocked = false;
+    isSubmitting = false;
 
     // Focus input
     if (inpText && inpText.style.display !== 'none') {
@@ -926,9 +915,11 @@ async function handleAnswerFailure(item) {
   }
 }
 
+let isSubmitting = false;
+
 // ─── SUBMIT ───────────────────────────────────────────────────────────────────
 async function handleSubmit() {
-  if (isLocked || !currentQuestion) return;
+  if (isLocked || isSubmitting || !currentQuestion) return;
 
   let value = '';
   const qtype = currentQuestion.type;
@@ -953,6 +944,7 @@ async function handleSubmit() {
       showError(localizedEnglishOnlyError);
       lockInput(false);
       isLocked = false;
+      isSubmitting = false;
       return;
     }
   }
@@ -962,10 +954,12 @@ async function handleSubmit() {
     showError('Please provide an answer.');
     lockInput(false);
     isLocked = false;
+    isSubmitting = false;
     return;
   }
 
   if (isRecording) stopRecording();
+  isSubmitting = true;
   isLocked = true;
   lockInput(true);
   hideError();
@@ -1024,6 +1018,7 @@ async function handleSubmit() {
       return;
     }
     isLocked = false;
+    isSubmitting = false;
     await displayQuestion({
       question: targetNext,
       next_question: null,
@@ -1038,8 +1033,12 @@ async function handleSubmit() {
     while (queueItem.status === 'pending' || queueItem.status === 'sending') {
       await sleep(50);
     }
-    if (queueItem.status === 'failed') return;
+    if (queueItem.status === 'failed') {
+      isSubmitting = false;
+      return;
+    }
     isLocked = false;
+    isSubmitting = false;
     await fetchQuestion();
   }
 }
@@ -1055,7 +1054,11 @@ async function handleCompletion(outroVideoSrc, ui) {
   lockInput(true);
   if (questionEcho) questionEcho.style.display = 'none';
   if (inputArea) inputArea.style.display = 'none';
-  setProgress(100);
+  if (currentQTotal > 0) {
+    updateProgressUI(currentQTotal, currentQTotal, 100);
+  } else {
+    setProgress(100);
+  }
 
   // Block "complete" until every queued answer has been confirmed:
   const completePromise = (async () => {
@@ -1145,12 +1148,57 @@ async function handleCompletion(outroVideoSrc, ui) {
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-function setProgress(pct, qNum, qTotal) {
-  avpFill.style.width = pct + '%';
-  if (qNum && qTotal) {
-    avpLabel.textContent = `Question ${qNum} of ${qTotal}`;
-    rpStep.textContent = `${qNum} / ${qTotal}`;
+let currentQNumber = 1;
+let currentQTotal = 0;
+
+function updateProgressUI(qNum, qTotal, pct) {
+  try {
+    if (qNum !== undefined && qNum !== null && !isNaN(Number(qNum)) && Number(qNum) > 0) {
+      currentQNumber = Number(qNum);
+    }
+    if (qTotal !== undefined && qTotal !== null && !isNaN(Number(qTotal)) && Number(qTotal) > 0) {
+      currentQTotal = Number(qTotal);
+    }
+
+    if (currentQTotal > 0) {
+      const num = Math.min(currentQNumber, currentQTotal);
+      const total = currentQTotal;
+      const formattedStep = `${num}/${total}`;
+      const ariaLabelText = `Question ${num} of ${total}`;
+
+      if (rpStep) {
+        rpStep.textContent = formattedStep;
+        if (rpStep.setAttribute) rpStep.setAttribute('aria-label', ariaLabelText);
+      }
+      if (avpLabel) {
+        avpLabel.textContent = ariaLabelText;
+        if (avpLabel.setAttribute) avpLabel.setAttribute('aria-label', ariaLabelText);
+      }
+      if (qeNum) {
+        qeNum.textContent = ariaLabelText;
+      }
+
+      let fillPct = pct;
+      if (fillPct === undefined || fillPct === null || isNaN(Number(fillPct))) {
+        fillPct = Math.min(100, Math.round(((num - 1) / total) * 100));
+      }
+      if (avpFill) {
+        avpFill.style.width = fillPct + '%';
+      }
+    } else if (pct !== undefined && pct !== null && !isNaN(Number(pct))) {
+      if (avpFill) {
+        avpFill.style.width = pct + '%';
+      }
+    }
+  } catch (err) {
+    console.error('Error updating progress UI:', err);
+  } finally {
+    // try/finally ensures no preceding or internal exception leaves callers stalled
   }
+}
+
+function setProgress(pct, qNum, qTotal) {
+  updateProgressUI(qNum, qTotal, pct);
 }
 
 function setSpeakingOverlay(visible, text) {
@@ -1251,10 +1299,10 @@ async function waitForAudio(audio) {
 // ─── KEYBOARD ─────────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && document.activeElement !== inpTextarea) {
-    if (!isLocked && (!waActionBtn.disabled)) { e.preventDefault(); handleSubmit(); }
+    if (!isLocked && !isSubmitting && !waActionBtn.disabled) { e.preventDefault(); handleSubmit(); }
   }
   if (e.key === 'Enter' && e.ctrlKey && document.activeElement === inpTextarea) {
-    if (!isLocked && (!waActionBtn.disabled)) handleSubmit();
+    if (!isLocked && !isSubmitting && !waActionBtn.disabled) handleSubmit();
   }
 });
 

@@ -528,6 +528,8 @@ def index(request):
     request.session['dmcore_play_list'] = playlist
     request.session['unsaved_answers'] = []
     request.session['answers'] = {}
+    request.session['skipped_questions'] = []
+    request.session['invalid_attempts'] = {}
     request.session['q_index'] = 0
     request.session['interview_finished'] = False
     request.session.modified = True
@@ -586,6 +588,8 @@ def demo_interview(request):
     request.session['demo_mode'] = True
     request.session['token_interview'] = False
     request.session['answers'] = {}
+    request.session['skipped_questions'] = []
+    request.session['invalid_attempts'] = {}
     request.session['q_index'] = 0
     request.session['language'] = request.GET.get('lang', 'en')
     request.session['interview_language'] = request.session['language']
@@ -614,13 +618,53 @@ def interview(request):
                  if token_mode else get_active_questions(request.session.get('answers', {})))
     current_lang = request.session.get('interview_language') or request.session.get('language', 'en')
     answers = request.session.get('answers', {})
+    skipped = request.session.get('skipped_questions', [])
+    q_index = derive_current_q_index(active_qs, answers, skipped)
+    request.session['q_index'] = q_index
+    request.session.modified = True
+
+    total = len(active_qs)
+    curr_num = min(q_index + 1, total) if total else 1
+    init_pct = int(((curr_num - 1) / total) * 100) if total else 0
+
     return render(request, 'screening/interview.html', {
-        'total_questions': len(active_qs),
+        'total_questions': total,
+        'current_question_number': curr_num,
+        'initial_progress': init_pct,
         'current_language': current_lang,
         'candidate_name': request.session.get('candidate_name', ''),
         'token_interview': token_mode,
         'can_change_language': len(answers) == 0,
     })
+
+
+def derive_current_q_index(active_qs, answers, skipped_questions=None):
+    """
+    Derive the resume question index strictly from accepted answers and deliberately skipped questions.
+    Returns the index in active_qs of the first unanswered, non-skipped question.
+    If all active questions have accepted answers or have been skipped, returns len(active_qs).
+    """
+    if not active_qs:
+        return 0
+    skipped_set = set(skipped_questions or [])
+    answers_dict = answers or {}
+
+    for idx, q in enumerate(active_qs):
+        qid = q.get('id')
+        if qid in skipped_set or str(qid) in skipped_set:
+            continue
+        field = q.get('field')
+        key = q.get('key')
+        has_ans = False
+        for k in (field, key, qid, str(qid)):
+            if k is not None and k in answers_dict:
+                val = answers_dict[k]
+                if (val is not None and str(val).strip() != '') or q.get('optional', False):
+                    has_ans = True
+                    break
+        if not has_ans:
+            return idx
+    return len(active_qs)
 
 
 def build_question_payload(q_index, active_qs, lang):
@@ -677,71 +721,110 @@ def build_question_payload(q_index, active_qs, lang):
 
     conditional_next = {}
     if question['id'] == 10:
-        q14 = next((item for item in active_qs if item['id'] == 14), None)
-        q11 = next((item for item in active_qs if item['id'] == 11), None)
-        if q14:
-            tr14 = get_translated_question(q14, lang)
-            m14 = resolve_question_media(lang, 14)
-            err14 = resolve_error_media(lang, q14.get('key', ''), q14.get('error_video', ''))
+        active_fresher = [item for item in active_qs if item['id'] not in (11, 12, 13)]
+        q10_idx_f = next((i for i, item in enumerate(active_fresher) if item['id'] == 10), None)
+        if q10_idx_f is not None and q10_idx_f + 1 < len(active_fresher):
+            next_q_f = active_fresher[q10_idx_f + 1]
+            tr_f = get_translated_question(next_q_f, lang)
+            m_f = resolve_question_media(lang, next_q_f['id'])
+            err_f = resolve_error_media(lang, next_q_f.get('key', ''), next_q_f.get('error_video', ''))
             conditional_next['fresher'] = {
-                'id': tr14['id'],
-                'text': tr14['question'],
-                'type': tr14['type'],
-                'options': tr14.get('options', []),
-                'other_label': tr14.get('other_label', ''),
-                'placeholder': tr14.get('placeholder', ''),
-                'hint': get_question_hint(14, lang) or tr14.get('hint', ''),
-                'optional': tr14.get('optional', False),
-                'number': 14,
-                'total': total,
-                'question_video': m14['url'],
-                'video_is_fallback': m14['is_fallback'],
-                'error_video_url': err14['url'] if err14 else None,
+                'id': tr_f['id'],
+                'text': tr_f['question'],
+                'type': tr_f['type'],
+                'options': tr_f.get('options', []),
+                'other_label': tr_f.get('other_label', ''),
+                'placeholder': tr_f.get('placeholder', ''),
+                'hint': get_question_hint(tr_f['id'], lang) or tr_f.get('hint', ''),
+                'optional': tr_f.get('optional', False),
+                'number': q10_idx_f + 2,
+                'total': len(active_fresher),
+                'question_video': m_f['url'],
+                'video_is_fallback': m_f['is_fallback'],
+                'error_video_url': err_f['url'] if err_f else None,
                 'idle_video': idle_video_url,
             }
-        if q11:
-            tr11 = get_translated_question(q11, lang)
-            m11 = resolve_question_media(lang, 11)
-            err11 = resolve_error_media(lang, q11.get('key', ''), q11.get('error_video', ''))
+        else:
+            conditional_next['fresher'] = {'done': True, 'outro_video': outro_url}
+
+        active_exp = [item for item in active_qs]
+        q10_idx_e = next((i for i, item in enumerate(active_exp) if item['id'] == 10), None)
+        if q10_idx_e is not None and q10_idx_e + 1 < len(active_exp):
+            next_q_e = active_exp[q10_idx_e + 1]
+            tr_e = get_translated_question(next_q_e, lang)
+            m_e = resolve_question_media(lang, next_q_e['id'])
+            err_e = resolve_error_media(lang, next_q_e.get('key', ''), next_q_e.get('error_video', ''))
             conditional_next['experienced'] = {
-                'id': tr11['id'],
-                'text': tr11['question'],
-                'type': tr11['type'],
-                'options': tr11.get('options', []),
-                'other_label': tr11.get('other_label', ''),
-                'placeholder': tr11.get('placeholder', ''),
-                'hint': get_question_hint(11, lang) or tr11.get('hint', ''),
-                'optional': tr11.get('optional', False),
-                'number': 11,
-                'total': total,
-                'question_video': m11['url'],
-                'video_is_fallback': m11['is_fallback'],
-                'error_video_url': err11['url'] if err11 else None,
+                'id': tr_e['id'],
+                'text': tr_e['question'],
+                'type': tr_e['type'],
+                'options': tr_e.get('options', []),
+                'other_label': tr_e.get('other_label', ''),
+                'placeholder': tr_e.get('placeholder', ''),
+                'hint': get_question_hint(tr_e['id'], lang) or tr_e.get('hint', ''),
+                'optional': tr_e.get('optional', False),
+                'number': q10_idx_e + 2,
+                'total': len(active_exp),
+                'question_video': m_e['url'],
+                'video_is_fallback': m_e['is_fallback'],
+                'error_video_url': err_e['url'] if err_e else None,
                 'idle_video': idle_video_url,
             }
+        else:
+            conditional_next['experienced'] = {'done': True, 'outro_video': outro_url}
+
     elif question['id'] == 21:
-        conditional_next['no'] = {'done': True, 'outro_video': outro_url}
-        q22 = next((item for item in active_qs if item['id'] == 22), None)
-        if q22:
-            tr22 = get_translated_question(q22, lang)
-            m22 = resolve_question_media(lang, 22)
-            err22 = resolve_error_media(lang, q22.get('key', ''), q22.get('error_video', ''))
-            conditional_next['yes'] = {
-                'id': tr22['id'],
-                'text': tr22['question'],
-                'type': tr22['type'],
-                'options': tr22.get('options', []),
-                'other_label': tr22.get('other_label', ''),
-                'placeholder': tr22.get('placeholder', ''),
-                'hint': get_question_hint(22, lang) or tr22.get('hint', ''),
-                'optional': tr22.get('optional', False),
-                'number': 22,
-                'total': total,
-                'question_video': m22['url'],
-                'video_is_fallback': m22['is_fallback'],
-                'error_video_url': err22['url'] if err22 else None,
+        active_no = [item for item in active_qs if item['id'] not in (22, 23, 24)]
+        q21_idx_n = next((i for i, item in enumerate(active_no) if item['id'] == 21), None)
+        if q21_idx_n is not None and q21_idx_n + 1 < len(active_no):
+            next_q_n = active_no[q21_idx_n + 1]
+            tr_n = get_translated_question(next_q_n, lang)
+            m_n = resolve_question_media(lang, next_q_n['id'])
+            err_n = resolve_error_media(lang, next_q_n.get('key', ''), next_q_n.get('error_video', ''))
+            conditional_next['no'] = {
+                'id': tr_n['id'],
+                'text': tr_n['question'],
+                'type': tr_n['type'],
+                'options': tr_n.get('options', []),
+                'other_label': tr_n.get('other_label', ''),
+                'placeholder': tr_n.get('placeholder', ''),
+                'hint': get_question_hint(tr_n['id'], lang) or tr_n.get('hint', ''),
+                'optional': tr_n.get('optional', False),
+                'number': q21_idx_n + 2,
+                'total': len(active_no),
+                'question_video': m_n['url'],
+                'video_is_fallback': m_n['is_fallback'],
+                'error_video_url': err_n['url'] if err_n else None,
                 'idle_video': idle_video_url,
             }
+        else:
+            conditional_next['no'] = {'done': True, 'outro_video': outro_url}
+
+        active_yes = [item for item in active_qs]
+        q21_idx_y = next((i for i, item in enumerate(active_yes) if item['id'] == 21), None)
+        if q21_idx_y is not None and q21_idx_y + 1 < len(active_yes):
+            next_q_y = active_yes[q21_idx_y + 1]
+            tr_y = get_translated_question(next_q_y, lang)
+            m_y = resolve_question_media(lang, next_q_y['id'])
+            err_y = resolve_error_media(lang, next_q_y.get('key', ''), next_q_y.get('error_video', ''))
+            conditional_next['yes'] = {
+                'id': tr_y['id'],
+                'text': tr_y['question'],
+                'type': tr_y['type'],
+                'options': tr_y.get('options', []),
+                'other_label': tr_y.get('other_label', ''),
+                'placeholder': tr_y.get('placeholder', ''),
+                'hint': get_question_hint(tr_y['id'], lang) or tr_y.get('hint', ''),
+                'optional': tr_y.get('optional', False),
+                'number': q21_idx_y + 2,
+                'total': len(active_yes),
+                'question_video': m_y['url'],
+                'video_is_fallback': m_y['is_fallback'],
+                'error_video_url': err_y['url'] if err_y else None,
+                'idle_video': idle_video_url,
+            }
+        else:
+            conditional_next['yes'] = {'done': True, 'outro_video': outro_url}
 
     debug_info = None
     if settings.DEBUG:
@@ -786,13 +869,19 @@ def get_question(request):
     try:
         answers = request.session.get('answers', {})
         addendum_text = None
-        q_index = request.session.get('q_index', 0)
         token_mode = request.session.get('token_interview', False)
         demo_mode = settings.DEBUG and request.session.get('demo_mode', False)
         if not token_mode and not demo_mode:
             return JsonResponse({'error': 'Interview link required'}, status=403)
         active_qs = (get_dmcore_active_questions(request.session.get('dmcore_play_list', []), answers)
                      if token_mode else get_active_questions(answers))
+
+        q_index = request.session.get('q_index')
+        if q_index is None:
+            skipped = request.session.get('skipped_questions', [])
+            q_index = derive_current_q_index(active_qs, answers, skipped)
+            request.session['q_index'] = q_index
+            request.session.modified = True
 
         lang = request.session.get('interview_language') or request.session.get('language', 'en')
         if request.body:
@@ -847,6 +936,7 @@ def submit_answer(request):
         else:
             q_id = raw_question_id
             active_qs = get_active_questions(answers)
+        q_index = request.session.get('q_index', 0)
         if q_index >= len(active_qs):
             return JsonResponse({'done': True})
             
@@ -982,14 +1072,21 @@ def submit_answer(request):
                 logger.warning('Question %s failed %s validation attempts; skipping question without saving.', q['id'], MAX_INVALID_ATTEMPTS)
                 invalid_attempts.pop(q_id_str, None)
                 request.session['invalid_attempts'] = invalid_attempts
-                request.session['q_index'] = q_index + 1
-                request.session.modified = True
+
+                skipped_list = request.session.get('skipped_questions', [])
+                if q['id'] not in skipped_list:
+                    skipped_list.append(q['id'])
+                request.session['skipped_questions'] = skipped_list
 
                 if token_mode:
                     active_qs = get_dmcore_active_questions(request.session.get('dmcore_play_list', []), answers)
                 else:
                     active_qs = get_active_questions(answers)
-                new_index = request.session['q_index']
+                derived = derive_current_q_index(active_qs, answers, skipped_list)
+                new_index = max(q_index + 1, derived)
+                request.session['q_index'] = new_index
+                request.session.modified = True
+
                 total = len(active_qs)
                 done = new_index >= total
                 outro_url = None
@@ -1007,6 +1104,8 @@ def submit_answer(request):
                     'error_text': error_msg_translated,
                     'error': error_msg_translated,
                     'progress': int((new_index / total) * 100) if total else 100,
+                    'current_number': min(new_index + 1, total),
+                    'total': total,
                     'outro_video': outro_url,
                     'completion_video': outro_url,
                     'ui': TRANSLATIONS.get(lang, {}).get('ui', {}),
@@ -1063,13 +1162,15 @@ def submit_answer(request):
 
         answers[q['field']] = value_english
         request.session['answers'] = answers
-        request.session['q_index'] = q_index + 1
-        request.session.modified = True
         if token_mode:
             active_qs = get_dmcore_active_questions(request.session.get('dmcore_play_list', []), answers)
         else:
             active_qs = get_active_questions(answers)
-        new_index = request.session['q_index']
+        skipped = request.session.get('skipped_questions', [])
+        derived = derive_current_q_index(active_qs, answers, skipped)
+        new_index = max(q_index + 1, derived)
+        request.session['q_index'] = new_index
+        request.session.modified = True
         payload = build_question_payload(new_index, active_qs, lang)
         payload['valid'] = True
         t_view_total = time.perf_counter() - t_view_start

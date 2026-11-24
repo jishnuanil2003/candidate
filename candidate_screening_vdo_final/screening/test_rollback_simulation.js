@@ -20,6 +20,9 @@ function createElement(id, tagName = 'div') {
     textContent: '',
     innerHTML: '',
     style: { display: 'none', opacity: '1' },
+    attributes: {},
+    setAttribute(k, v) { this.attributes[k] = v; },
+    getAttribute(k) { return this.attributes[k]; },
     classList: {
       classes: new Set(),
       add(c) { this.classes.add(c); },
@@ -84,7 +87,11 @@ global.videoEngine = {
   elQuestion: videoQuestion,
   _switchToIdle() { this.state = 'waiting'; },
   stopAll() { this.stopped = true; },
-  playError(errSrc, idleSrc, muted) { this.playingError = errSrc; if (this.elError) this.elError.loop = false; },
+  playError(errSrc, idleSrc, muted) {
+    this.playingError = errSrc;
+    if (this.elError) this.elError.loop = false;
+    return new Promise(resolve => setTimeout(resolve, 50));
+  },
   pause() { this.paused = true; }
 };
 
@@ -92,15 +99,61 @@ global.videoEngine = {
 let currentQuestion = null;
 let currentPlaybackId = 0;
 let isLocked = false;
+let isSubmitting = false;
 let selectedOption = null;
 let answerQueue = [];
 let ttsEnabled = false;
 let selectedLanguage = 'en';
 
 const QUESTION_HINTS = {
-  22: "Enter the month and year, for example: June 2025.",
-  23: "Enter the month and year, or Ongoing, for example: August 2025."
+  22: "Enter the month and year, for example: June 2025 or 06/2025.",
+  23: "Enter the month and year, or Ongoing, for example: August 2025 or 08/2025."
 };
+
+let currentQNumber = 1;
+let currentQTotal = 0;
+
+function updateProgressUI(qNum, qTotal, pct) {
+  try {
+    if (qNum !== undefined && qNum !== null && !isNaN(Number(qNum)) && Number(qNum) > 0) {
+      currentQNumber = Number(qNum);
+    }
+    if (qTotal !== undefined && qTotal !== null && !isNaN(Number(qTotal)) && Number(qTotal) > 0) {
+      currentQTotal = Number(qTotal);
+    }
+
+    if (currentQTotal > 0) {
+      const num = Math.min(currentQNumber, currentQTotal);
+      const total = currentQTotal;
+      const formattedStep = `${num}/${total}`;
+      const ariaLabelText = `Question ${num} of ${total}`;
+
+      const rpStep = document.getElementById('rpStep');
+      if (rpStep) {
+        rpStep.textContent = formattedStep;
+        if (rpStep.setAttribute) rpStep.setAttribute('aria-label', ariaLabelText);
+      }
+      const avpLabel = document.getElementById('avpLabel');
+      if (avpLabel) {
+        avpLabel.textContent = ariaLabelText;
+        if (avpLabel.setAttribute) avpLabel.setAttribute('aria-label', ariaLabelText);
+      }
+      if (qeNum) {
+        qeNum.textContent = ariaLabelText;
+      }
+      const avpFill = document.getElementById('avpFill');
+      if (avpFill) {
+        let fillPct = pct;
+        if (fillPct === undefined || fillPct === null || isNaN(Number(fillPct))) {
+          fillPct = Math.min(100, Math.round(((num - 1) / total) * 100));
+        }
+        avpFill.style.width = fillPct + '%';
+      }
+    }
+  } catch (err) {
+    console.error('Error updating progress UI:', err);
+  }
+}
 
 function cleanHtml(html) { return String(html ?? '').replace(/<[^>]*>/g, ''); }
 
@@ -156,13 +209,13 @@ async function handleAnswerFailure(item) {
 
   if (soText) soText.textContent = data.network_error ? 'Connection error.' : 'Invalid answer.';
 
-  // 1. ROLLBACK OPTIMISTIC TRANSITION: stop next question's video
-  videoEngine.stopAll();
+  // 1. ROLLBACK OPTIMISTIC TRANSITION: safely pause playback
+  videoEngine.pause();
 
   // 2. Restore CURRENT question (number, text, options)
   currentQuestion = answeringQuestion;
   selectedOption = null;
-  if (qeNum) qeNum.textContent = `Question ${answeringQuestion.number} of ${answeringQuestion.total}`;
+  updateProgressUI(answeringQuestion.number, answeringQuestion.total, data.progress);
   if (qeText) qeText.innerHTML = cleanHtml(answeringQuestion.text);
 
   // 3. Clear input and re-render current question input
@@ -179,9 +232,7 @@ async function handleAnswerFailure(item) {
 
   try {
     if (errVideo) {
-      videoEngine.playError(errVideo, data.idle_video, false);
-      if (videoEngine.elError) videoEngine.elError.loop = false;
-      await sleep(50);
+      await videoEngine.playError(errVideo, data.idle_video, false);
     } else {
       await sleep(10);
     }
@@ -194,6 +245,7 @@ async function handleAnswerFailure(item) {
     // Re-enable input and Send button
     lockInput(false);
     isLocked = false;
+    isSubmitting = false;
 
     // Focus input
     if (inpText && inpText.style.display !== 'none') {
@@ -210,7 +262,7 @@ async function runTest() {
     number: 22,
     total: 24,
     text: "When did your internship start? Please provide the month and year.",
-    hint: "Enter the month and year, for example: June 2025."
+    hint: "Enter the month and year, for example: June 2025 or 06/2025."
   };
 
   const question23 = {
@@ -247,15 +299,15 @@ async function runTest() {
       reason: "invalid",
       error: "That date doesn't look right.",
       error_video_url: "/media/interview/english/invalid_input.mp4?v=123",
-      hint: "Enter the month and year, for example: June 2025."
+      hint: "Enter the month and year, for example: June 2025 or 06/2025."
     }
   };
 
   console.log("Executing handleAnswerFailure (rollback)...");
   await handleAnswerFailure(failedItem);
 
-  // VERIFY 1: Next question video was stopped
-  assert.strictEqual(videoEngine.stopped, true, "TEST 1 PASSED: videoEngine.stopAll() was called");
+  // VERIFY 1: Active video was paused safely without calling stopAll
+  assert.strictEqual(videoEngine.paused, true, "TEST 1 PASSED: videoEngine.pause() was called");
 
   // VERIFY 2: CURRENT question (22) was completely restored
   assert.strictEqual(currentQuestion.id, 22, "TEST 2A PASSED: currentQuestion restored to 22");
@@ -268,7 +320,7 @@ async function runTest() {
 
   // VERIFY 4: Hint box appears with correct hint
   assert.strictEqual(ivHintBox.style.display, "flex", "TEST 4A PASSED: ivHintBox is displayed");
-  assert.strictEqual(ivHintBoxText.textContent, "Invalid input. Enter the month and year, for example: June 2025.", "TEST 4B PASSED: Correct hint text displayed");
+  assert.strictEqual(ivHintBoxText.textContent, "Invalid input. Enter the month and year, for example: June 2025 or 06/2025.", "TEST 4B PASSED: Correct hint text displayed");
 
   // VERIFY 5: Input and Send button are re-enabled and unlocked
   assert.strictEqual(isLocked, false, "TEST 5A PASSED: isLocked is false");

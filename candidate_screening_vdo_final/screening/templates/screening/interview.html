@@ -196,12 +196,12 @@ main{padding:0;min-height:0}
     <div class="iv-card">
       <div class="iv-card-head">
         <span class="iv-card-label">Interview Progress</span>
-        <span class="iv-step-badge" id="rpStep">Loading...</span>
+        <span class="iv-step-badge" id="rpStep" aria-label="Question {{ current_question_number|default:1 }} of {{ total_questions|default:0 }}">{% if total_questions %}{{ current_question_number|default:1 }}/{{ total_questions }}{% else %}Loading...{% endif %}</span>
       </div>
       <div class="iv-prog-track">
-        <div class="iv-prog-fill" id="avpFill" style="width:0%"></div>
+        <div class="iv-prog-fill" id="avpFill" style="width:{{ initial_progress|default:0 }}%"></div>
       </div>
-      <div class="iv-prog-pct" id="avpLabel">Question 0 of 0</div>
+      <div class="iv-prog-pct" id="avpLabel" aria-label="Question {{ current_question_number|default:1 }} of {{ total_questions|default:0 }}">Question {{ current_question_number|default:1 }} of {{ total_questions|default:0 }}</div>
     </div>
 
     <!-- Current Question -->
