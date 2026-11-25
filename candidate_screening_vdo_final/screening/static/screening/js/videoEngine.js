@@ -119,6 +119,7 @@ class VideoEngine {
    * so the screen is NEVER blank during transitions.
    */
   playQuestion(src, idleSrc, muted) {
+    this.cancelError();
     if (this._fallbackAudio) { this._fallbackAudio.pause(); this._fallbackAudio = null; }
     this.currentQuestionSrc = src;
     this.currentIdleSrc = idleSrc;
@@ -282,6 +283,7 @@ class VideoEngine {
    * errors, or reaches (duration + 2s) safety timeout.
    */
   playError(errorSrc, idleSrc, muted) {
+    this.cancelError();
     this.currentIdleSrc = idleSrc;
     this.state = 'error';
 
@@ -301,19 +303,30 @@ class VideoEngine {
       let settled = false;
       let safetyTimer = null;
 
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        if (safetyTimer) clearTimeout(safetyTimer);
+      const cleanup = () => {
+        if (safetyTimer) { clearTimeout(safetyTimer); safetyTimer = null; }
         vEl.removeEventListener('ended', onEnded);
         vEl.removeEventListener('error', onError);
         vEl.removeEventListener('timeupdate', onTimeUpdate);
         this._errorResolve = null;
+        this._errorCleanup = null;
+      };
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
         this._switchToIdle();
         resolve();
       };
 
       this._errorResolve = finish;
+      this._errorCleanup = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
 
       const onEnded = () => finish();
       const onError = (e) => {
@@ -388,8 +401,17 @@ class VideoEngine {
     });
   }
 
+  /** Cancel any active error video playback, timer, and listeners */
+  cancelError() {
+    if (this._errorCleanup) {
+      this._errorCleanup();
+      this._errorCleanup = null;
+    }
+  }
+
   /** Safely pause all active video/audio playback */
   pause() {
+    this.cancelError();
     if (this._loadingTimeout) { clearTimeout(this._loadingTimeout); this._loadingTimeout = null; }
     if (this._overlayTimeout) { clearTimeout(this._overlayTimeout); this._overlayTimeout = null; }
     if (this.elQuestion) this.elQuestion.pause();
@@ -408,6 +430,7 @@ class VideoEngine {
 
   /** Stop everything (for completion) */
   stopAll() {
+    this.cancelError();
     if (this._loadingTimeout) { clearTimeout(this._loadingTimeout); this._loadingTimeout = null; }
     if (this._overlayTimeout) { clearTimeout(this._overlayTimeout); this._overlayTimeout = null; }
     this.elQuestion.pause();

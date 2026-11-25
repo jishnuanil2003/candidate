@@ -2,6 +2,7 @@
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -261,6 +262,87 @@ class SubmitAnswerInvalidFlowApiTests(TestCase):
         s_after_2 = self.client.session
         self.assertEqual(s_after_2['answers']['internship_start_date'], 'June 2025')
         self.assertEqual(s_after_2['q_index'], q22_idx + 1)
+
+    def test_two_invalid_answers_then_valid_advances(self):
+        """Two invalid attempts leave 1 attempt remaining on Q22; third valid attempt advances to Q23."""
+        session, active, q22_idx = self._prepare_session_for_qid(22)
+
+        # Attempt 1: Invalid
+        resp1 = self.client.post(
+            self.url,
+            data=json.dumps({'question_id': 22, 'value': 'bad_date_1', 'lang': 'en'}),
+            content_type='application/json'
+        )
+        self.assertEqual(resp1.status_code, 200)
+        d1 = resp1.json()
+        self.assertFalse(d1['valid'])
+        self.assertEqual(d1['attempts_left'], 2)
+        self.assertEqual(self.client.session['q_index'], q22_idx)
+
+        # Attempt 2: Invalid
+        resp2 = self.client.post(
+            self.url,
+            data=json.dumps({'question_id': 22, 'value': 'bad_date_2', 'lang': 'en'}),
+            content_type='application/json'
+        )
+        self.assertEqual(resp2.status_code, 200)
+        d2 = resp2.json()
+        self.assertFalse(d2['valid'])
+        self.assertEqual(d2['attempts_left'], 1)
+        self.assertEqual(self.client.session['q_index'], q22_idx)
+
+        # Attempt 3: Valid
+        resp3 = self.client.post(
+            self.url,
+            data=json.dumps({'question_id': 22, 'value': 'June 2025', 'lang': 'en'}),
+            content_type='application/json'
+        )
+        self.assertEqual(resp3.status_code, 200)
+        d3 = resp3.json()
+        self.assertTrue(d3['valid'])
+        self.assertEqual(d3['question']['id'], 23)
+        self.assertEqual(self.client.session['q_index'], q22_idx + 1)
+        self.assertEqual(self.client.session['answers']['internship_start_date'], 'June 2025')
+
+    def test_dmcore_receives_only_valid_answer_in_order(self):
+        """DMCore receives exactly one value for question 22 and it is the valid one."""
+        session = self.client.session
+        session['token_interview'] = True
+        session['dmcore_play_list'] = [
+            {'question_id': 21},
+            {'question_id': 22},
+            {'question_id': 23}
+        ]
+        session['answers'] = {'internship_experience': 'Yes'}
+        session['q_index'] = 1  # on question 22
+        session['skipped_questions'] = []
+        session['invalid_attempts'] = {}
+        session.save()
+
+        dmcore_calls = []
+        def mock_save_answer(token, q_id, answer_text):
+            dmcore_calls.append({'q_id': q_id, 'answer': answer_text})
+            return {'status': 'success'}
+
+        with patch('screening.views.save_answer', side_effect=mock_save_answer):
+            # 1. Invalid attempt
+            resp_inv = self.client.post(
+                self.url,
+                data=json.dumps({'question_id': 22, 'value': 'bad_date', 'lang': 'en'}),
+                content_type='application/json'
+            )
+            self.assertFalse(resp_inv.json()['valid'])
+            self.assertEqual(len(dmcore_calls), 0)
+
+            # 2. Valid attempt
+            resp_val = self.client.post(
+                self.url,
+                data=json.dumps({'question_id': 22, 'value': 'June 2025', 'lang': 'en'}),
+                content_type='application/json'
+            )
+            self.assertTrue(resp_val.json()['valid'])
+            self.assertEqual(len(dmcore_calls), 1)
+            self.assertEqual(dmcore_calls[0], {'q_id': 22, 'answer': 'June 2025'})
 
     def test_refresh_after_invalid_answer_resumes_at_q22(self):
         """Page refresh after an invalid answer resumes at Q22, never jumps to end."""

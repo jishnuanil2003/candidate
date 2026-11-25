@@ -39,6 +39,7 @@ let isLocked = false;
 let selectedLanguage = document.getElementById('langSelect')?.value || new URLSearchParams(window.location.search).get('lang') || 'en';
 let ttsEnabled = true;
 let currentPlaybackId = 0;
+let submissionSequence = 0;
 let localizedEnglishOnlyError = "Please enter your response in English only.";
 
 // ─── Language & Text-To-Speech Functions ──────────────────────────────────────
@@ -785,8 +786,17 @@ async function processAnswerQueue() {
       data = { valid: false, network_error: true, error: 'Network error. Please check your connection and try again.' };
     }
 
+    // Ignore late or out-of-order responses: only apply response if it belongs to the latest submission for this question
+    if (item.id !== submissionSequence || (currentQuestion && item.questionId !== currentQuestion.id && !item.optimisticTarget)) {
+      console.warn('Ignoring stale or out-of-order response for submission', item.id);
+      const idx = answerQueue.indexOf(item);
+      if (idx !== -1) answerQueue.splice(idx, 1);
+      continue;
+    }
+
     if (data.valid) {
       item.status = 'confirmed';
+      item.responseData = data;
       if (statusText) statusText.textContent = data.done ? 'Interview finished.' : 'Answer saved.';
       if (data.ui) localizeUI(data.ui);
       if (data.question) {
@@ -803,6 +813,17 @@ async function processAnswerQueue() {
       if (data.conditional_next) {
         conditionalNextMap = data.conditional_next;
       }
+
+      // If optimistic advancement was done:
+      if (item.optimisticTarget) {
+        const idx = answerQueue.indexOf(item);
+        if (idx !== -1) answerQueue.splice(idx, 1);
+        // If client and server disagree about the current question, the server wins
+        if (data.question && currentQuestion && data.question.id !== currentQuestion.id) {
+          console.warn('Client-server mismatch detected on advance. Server wins.');
+          await displayQuestion(data);
+        }
+      }
     } else {
       if (data.error === 'Question mismatch.' || (typeof data.error === 'string' && data.error.includes('mismatch'))) {
         console.warn('Question mismatch detected. Resyncing question from server...');
@@ -814,10 +835,10 @@ async function processAnswerQueue() {
         await fetchQuestion();
         return;
       }
-      item.status = 'failed';
       item.errorData = data;
       isProcessingQueue = false;
       await handleAnswerFailure(item);
+      item.status = 'failed';
       return;
     }
   }
@@ -828,12 +849,20 @@ async function processAnswerQueue() {
 async function handleAnswerFailure(item) {
   currentPlaybackId++;
   cancelTTS();
+  if (typeof videoEngine !== 'undefined' && videoEngine.cancelError) {
+    videoEngine.cancelError();
+  }
 
   const answeringQuestion = item.question;
   const data = item.errorData || {};
 
   const idx = answerQueue.indexOf(item);
   if (idx !== -1) answerQueue.splice(idx, 1);
+  isProcessingQueue = false;
+
+  // Reset optimistic targets
+  nextQuestionData = null;
+  conditionalNextMap = null;
 
   const statusText = document.getElementById('soText');
   if (statusText) statusText.textContent = data.network_error ? 'Connection error.' : 'Invalid answer.';
@@ -899,6 +928,9 @@ async function handleAnswerFailure(item) {
     console.warn('Error during invalid answer flow:', err);
   } finally {
     // Return to waiting state (blink/idle loop)
+    if (typeof videoEngine !== 'undefined' && videoEngine.cancelError) {
+      videoEngine.cancelError();
+    }
     videoEngine._switchToIdle();
 
     // Re-enable input and Send button immediately
@@ -985,12 +1017,17 @@ async function handleSubmit() {
   }
 
   // Queue answer and send in background in order
+  const subId = ++submissionSequence;
   const queueItem = {
+    id: subId,
+    questionId: answeringQuestion.id,
     question: answeringQuestion,
     value: value,
     lang: selectedLanguage,
     status: 'pending',
-    errorData: null
+    errorData: null,
+    responseData: null,
+    optimisticTarget: null
   };
   answerQueue.push(queueItem);
 
@@ -1013,6 +1050,7 @@ async function handleSubmit() {
 
   // Play next question IMMEDIATELY as answer is accepted locally
   if (targetNext) {
+    queueItem.optimisticTarget = targetNext;
     if (targetNext.done) {
       await handleCompletion(targetNext.outro_video, null);
       return;
@@ -1029,17 +1067,36 @@ async function handleSubmit() {
       outro_video: null
     });
   } else {
-    // If targetNext not yet computed, wait for this answer to be processed
-    while (queueItem.status === 'pending' || queueItem.status === 'sending') {
-      await sleep(50);
-    }
-    if (queueItem.status === 'failed') {
+    // If targetNext not yet computed or reset after rejection, wait for this answer to be processed
+    try {
+      while (queueItem.status === 'pending' || queueItem.status === 'sending') {
+        await sleep(30);
+      }
+      if (queueItem.status === 'failed') {
+        return;
+      }
+      const data = queueItem.responseData;
+      const idx = answerQueue.indexOf(queueItem);
+      if (idx !== -1) answerQueue.splice(idx, 1);
+
+      if (!data || !data.valid) {
+        // Anything other than a clean accept: re-sync with server
+        await fetchQuestion();
+      } else if (data.done) {
+        if (data.ui) localizeUI(data.ui);
+        await handleCompletion(data.outro_video || data.completion_video, data.ui);
+      } else if (data.question) {
+        await displayQuestion(data);
+      } else {
+        await fetchQuestion();
+      }
+    } catch (advanceErr) {
+      console.error('Error during advance sequence:', advanceErr);
+      await fetchQuestion();
+    } finally {
+      isLocked = false;
       isSubmitting = false;
-      return;
     }
-    isLocked = false;
-    isSubmitting = false;
-    await fetchQuestion();
   }
 }
 

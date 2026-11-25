@@ -92,6 +92,7 @@ global.videoEngine = {
     if (this.elError) this.elError.loop = false;
     return new Promise(resolve => setTimeout(resolve, 50));
   },
+  cancelError() { this.cancelledError = true; },
   pause() { this.paused = true; }
 };
 

@@ -1128,6 +1128,18 @@ def submit_answer(request):
                 'hint': hint_text
             })
                 
+        answers[q['field']] = value_english
+        request.session['answers'] = answers
+        if token_mode:
+            active_qs = get_dmcore_active_questions(request.session.get('dmcore_play_list', []), answers)
+        else:
+            active_qs = get_active_questions(answers)
+        skipped = request.session.get('skipped_questions', [])
+        derived = derive_current_q_index(active_qs, answers, skipped)
+        new_index = max(q_index + 1, derived)
+        request.session['q_index'] = new_index
+        request.session.modified = True
+
         if token_mode:
             is_skipped_optional = q.get('optional', False) and not value_english.strip()
             if not is_skipped_optional and value_english:
@@ -1160,17 +1172,6 @@ def submit_answer(request):
                     request.session['unsaved_answers'] = unsaved
                     request.session.modified = True
 
-        answers[q['field']] = value_english
-        request.session['answers'] = answers
-        if token_mode:
-            active_qs = get_dmcore_active_questions(request.session.get('dmcore_play_list', []), answers)
-        else:
-            active_qs = get_active_questions(answers)
-        skipped = request.session.get('skipped_questions', [])
-        derived = derive_current_q_index(active_qs, answers, skipped)
-        new_index = max(q_index + 1, derived)
-        request.session['q_index'] = new_index
-        request.session.modified = True
         payload = build_question_payload(new_index, active_qs, lang)
         payload['valid'] = True
         t_view_total = time.perf_counter() - t_view_start
