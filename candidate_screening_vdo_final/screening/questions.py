@@ -143,13 +143,7 @@ def is_empty_or_filler(text):
 def validate_lead_source(value, answers=None):
     if is_empty_or_filler(value):
         return ValidationResult(False, "I don't have that on record yet. How did you first hear about us?", reason='empty')
-    val = value.strip()
-    if val.isdigit():
-        return ValidationResult(False, "Sorry, I couldn't catch that. Was it a friend, social media, your college, or a job portal?", reason='invalid')
-    letters = re.findall(r'[a-zA-Z]', val)
-    if len(letters) < 2:
-        return ValidationResult(False, "Sorry, I couldn't catch that. Was it a friend, social media, your college, or a job portal?", reason='invalid')
-
+    val = value.strip()[:2000]
     val_lower = val.lower()
 
     friend_keywords = ['friend', 'friends', 'referral', 'referred', 'colleague', 'coworker', 'peer', 'relative', 'family']
@@ -160,7 +154,7 @@ def validate_lead_source(value, answers=None):
     if any(kw in val_lower for kw in campus_keywords):
         return ValidationResult(True, "College/Campus")
 
-    # Job portal category (checked before social_keywords so "LinkedIn Jobs" matches Job Portal, not Social Media)
+    # Job portal category
     job_portal_keywords = [
         'job portal', 'job site', 'job board', 'portal', 'naukri', 'indeed',
         'linkedin jobs', 'linkedin job', 'internshala', 'monster', 'hirist',
@@ -175,26 +169,13 @@ def validate_lead_source(value, answers=None):
         return ValidationResult(True, "Social Media")
 
     clean_other = re.sub(r'^(other\s*:?\s*)', '', val, flags=re.IGNORECASE).strip()
-    return ValidationResult(True, f"Other: {clean_other}")
+    return ValidationResult(True, f"Other: {clean_other}" if clean_other else val)
 
 
 def validate_location(value, answers=None):
     if is_empty_or_filler(value):
         return ValidationResult(False, "I still need your current location. Which city or town do you live in?", reason='empty')
-    val = value.strip()
-    if len(val) < 2 or len(val) > 60:
-        return ValidationResult(False, "I couldn't recognise that place. Could you tell me the name of your city or town again?", reason='invalid')
-    if val.isdigit() or re.sub(r'[\s\d+\-(),.]', '', val) == '':
-        return ValidationResult(False, "I couldn't recognise that place. Could you tell me the name of your city or town again?", reason='invalid')
-    digits = re.findall(r'\d', val)
-    if len(digits) >= 7:
-        return ValidationResult(False, "I couldn't recognise that place. Could you tell me the name of your city or town again?", reason='invalid')
-    letters = re.findall(r'[a-zA-Z]', val)
-    if len(letters) < 2:
-        return ValidationResult(False, "I couldn't recognise that place. Could you tell me the name of your city or town again?", reason='invalid')
-    non_space_chars = len(re.sub(r'\s+', '', val))
-    if len(letters) / max(non_space_chars, 1) < 0.5:
-        return ValidationResult(False, "I couldn't recognise that place. Could you tell me the name of your city or town again?", reason='invalid')
+    val = value.strip()[:2000]
     return ValidationResult(True, val)
 
 
@@ -205,10 +186,7 @@ def validate_internship_done(value, answers=None):
     no_synonyms = ['no', 'nope', 'nah', 'not done', 'never', "haven't", 'have not', 'fresher', 'no, i am a fresher', 'ഇല്ല', 'नहीं', 'இல்லை', 'లేదు']
     if any(s == val_lower for s in ['no', 'nope', 'nah']) or any(s in val_lower for s in ['fresher', 'not done', "haven't"]) or val_lower in no_synonyms or any(s in value for s in ['ഇല്ല', 'नहीं', 'இல்லை', 'లేదు']):
         return ValidationResult(True, 'No')
-    yes_synonyms = ['yes', 'yeah', 'yep', 'yup', 'done', 'i have', 'have done', 'yes, i have', 'yes i have', 'അതെ', 'हाँ', 'ஆம்', 'అవును']
-    if any(s == val_lower for s in ['yes', 'yeah', 'yep', 'yup', 'done']) or any(s in val_lower for s in ['have done', 'i have', 'yes, i have', 'yes i have']) or any(s in value for s in ['അതെ', 'हाँ', 'ஆம்', 'అవును']):
-        return ValidationResult(True, 'Yes')
-    return ValidationResult(False, "Just to confirm, have you done an internship? A simple yes or no is fine.", reason='invalid')
+    return ValidationResult(True, 'Yes')
 
 
 def validate_internship_start_date(value, answers=None):
@@ -257,25 +235,7 @@ def validate_internship_end_date(value, answers=None):
 def validate_internship_topic(value, answers=None):
     if is_empty_or_filler(value):
         return ValidationResult(False, "What was your internship about? Tell me the topic or the kind of work you did.", reason='empty')
-    val = value.strip()
-    if len(val) < 8:
-        return ValidationResult(False, "I didn't quite get that. Could you describe in a few words what your internship was about?", reason='invalid')
-    if not re.search(r'[a-zA-Z]', val):
-        return ValidationResult(False, "I didn't quite get that. Could you describe in a few words what your internship was about?", reason='invalid')
-
-    words = re.findall(r'[a-zA-Z0-9]+', val.lower())
-    if len(words) > 1 and len(set(words)) == 1:
-        return ValidationResult(False, "I didn't quite get that. Could you describe in a few words what your internship was about?", reason='invalid')
-
-    if len(words) == 1:
-        w = words[0]
-        for chunk_len in range(1, len(w) // 2 + 1):
-            if len(w) % chunk_len == 0:
-                chunk = w[:chunk_len]
-                if chunk * (len(w) // chunk_len) == w:
-                    return ValidationResult(False, "I didn't quite get that. Could you describe in a few words what your internship was about?", reason='invalid')
-
-    return ValidationResult(True, val)
+    return ValidationResult(True, value.strip()[:2000])
 
 # Keep this as the sole source of question IDs, local field keys, prompts,
 # input metadata, and existing recorded video filenames.
@@ -384,8 +344,8 @@ QUESTION_LOOKUP = {
          'validator': validate_internship_end_date},
     24: {'id': 24, 'key': 'internship_topic', 'field': 'internship_topic', 'translation_key': 'internship_topic',
          'question_video': 'q24.mp4', 'error_video': 'internship_topic_error.mp4',
-         'question': 'What was the <strong>topic or domain</strong> of your internship?', 'type': 'text',
-         'placeholder': 'e.g. Web Development with Django, Machine Learning', 'hint': 'Briefly describe your internship topic or work',
+         'question': 'What was the topic or domain of your internship?', 'type': 'text',
+         'placeholder': 'e.g. Web Development with Django, Machine Learning', 'hint': 'Enter your internship domain or project topic, for example: Web Development with Django.',
          'condition': {'field': 'internship_done', 'value': 'Yes'},
          'validator': validate_internship_topic},
 }
@@ -435,64 +395,91 @@ def get_dmcore_active_questions(playlist, answers):
     return active
 
 
+STRICTLY_VALIDATED_QUESTION_IDS = {
+    2, 3, 8, 13, 22, 23,
+    '2', '3', '8', '13', '22', '23',
+    'email', 'phone', 'graduation_year', 'experience_duration', 'work_duration',
+    'internship_start_date', 'internship_end_date'
+}
+STRICTLY_VALIDATED_KEYS = {'email', 'phone', 'graduation_year', 'experience_duration', 'work_duration', 'internship_start_date', 'internship_end_date'}
+
+
 def validate_answer(question, value, answers=None):
-
-
-
     validator = question.get('validator')
     optional = question.get('optional', False)
+
     if is_empty_or_filler(value):
         if optional:
-            return ValidationResult(True, value)
+            return ValidationResult(True, '')
         if validator:
-            return validator(value, answers=answers)
+            res = validator(value, answers=answers)
+            if not res[0]:
+                return res
         return ValidationResult(False, 'This field cannot be empty. Please provide an answer.', reason='empty')
-    if validator:
-        res = validator(value, answers=answers)
-        if isinstance(res, ValidationResult):
-            return res
-        return ValidationResult(res[0], res[1], reason=getattr(res, 'reason', None) or (None if res[0] else 'invalid'))
 
+    # Trim and cap at 2000 characters (never reject for length)
+    val = str(value).strip()[:2000]
 
+    question_id = question.get('id')
+    question_key = question.get('key')
 
-    question_id = question['id']
+    # Non-validated questions: accept any non-empty answer in any language/script
+    if question_id not in STRICTLY_VALIDATED_QUESTION_IDS and question_key not in STRICTLY_VALIDATED_KEYS:
+        # If validator exists, run it for normalization / categorization (e.g. lead_source categories)
+        if validator:
+            res = validator(val, answers=answers)
+            if res[0]:
+                return res
+            return ValidationResult(True, val)
 
+        # For question 10 (has_experience): normalize fresher response so fresher skip works
+        if question_id == 10 or question_key == 'has_experience':
+            val_lower = val.lower()
+            if any(s in val_lower for s in ['fresher', 'no']) or any(s in val for s in ['തുടക്കക്കാരൻ', 'फ्रेशर', 'புதியவர்', 'ఫ్రెషర్', 'ഇല്ല', 'नहीं', 'இல்லை', 'లేదు']):
+                return ValidationResult(True, FRESHER_ANSWER)
+            return ValidationResult(True, 'Yes, I have experience')
 
+        # For options or free text, accept the option or any entered text
+        return ValidationResult(True, val)
 
-
-
-
-    if question_id == 1:
-        parts = value.strip().split()
-        if len(parts) < 2:
-            return ValidationResult(False, 'Please enter your full name — first and last name.', reason='invalid')
-        if any(char.isdigit() for char in value):
-            return ValidationResult(False, 'Name should not contain numbers.', reason='invalid')
-    elif question_id == 2:
-        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', value.strip()):
+    # -------------------------------------------------------------------------
+    # Only the 6 strictly validated questions reach here:
+    # 2: email
+    # 3: phone
+    # 8: graduation_year
+    # 13: experience_duration (work_duration)
+    # 22: internship_start_date
+    # 23: internship_end_date
+    # -------------------------------------------------------------------------
+    if question_id in (2, '2', 'email') or question_key == 'email':
+        if not re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', val):
             return ValidationResult(False, 'Please enter a valid email address.', reason='invalid')
-    elif question_id in (3, 'phone'):
-        digits = re.sub(r'[^\d]', '', value)
+        return ValidationResult(True, val)
+
+    elif question_id in (3, '3', 'phone') or question_key == 'phone':
+        digits = re.sub(r'[^\d]', '', val)
         if not digits.isdigit() or len(digits) < 10:
             return ValidationResult(False, 'Please enter a valid phone number with at least 10 digits.', reason='invalid')
-    elif question_id == 8:
-        year = value.strip()
-        if not re.match(r'^\d{4}$', year) or not (1950 <= int(year) <= 2030):
+        return ValidationResult(True, val)
+
+    elif question_id in (8, '8', 'graduation_year') or question_key == 'graduation_year':
+        if not re.match(r'^\d{4}$', val) or not (1950 <= int(val) <= 2030):
             return ValidationResult(False, 'Please enter a valid 4-digit graduation year.', reason='invalid')
-    elif question_id == 14:
-        skills = [skill.strip() for skill in value.split(',') if skill.strip()]
-        if len(skills) < 2:
-            return ValidationResult(False, 'Please enter at least 2 skills, separated by commas.', reason='invalid')
-    elif question_id == 17 and value.strip():
-        if not (value.startswith('http://') or value.startswith('https://')):
-            return ValidationResult(False, 'Please enter a valid URL starting with https://', reason='invalid')
-    elif question_id == 18:
-        if len(value.strip()) < 20:
-            return ValidationResult(False, 'Please write at least 20 characters for your answer.', reason='invalid')
-    elif question['type'] == 'options':
-        if value not in question.get('options', []):
+        return ValidationResult(True, val)
+
+    elif question_id in (13, '13', 'experience_duration', 'work_duration') or question_key in ('experience_duration', 'work_duration'):
+        options = question.get('options', [])
+        if options and val not in options:
             return ValidationResult(False, 'Please select one of the provided options.', reason='invalid')
-    return ValidationResult(True, value)
+        return ValidationResult(True, val)
+
+    elif question_id in (22, '22', 'internship_start_date') or question_key == 'internship_start_date':
+        return validate_internship_start_date(val, answers=answers)
+
+    elif question_id in (23, '23', 'internship_end_date') or question_key == 'internship_end_date':
+        return validate_internship_end_date(val, answers=answers)
+
+    return ValidationResult(True, val)
 
 
 def get_active_questions(session_answers):

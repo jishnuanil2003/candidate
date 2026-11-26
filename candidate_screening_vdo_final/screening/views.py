@@ -946,8 +946,9 @@ def submit_answer(request):
         if len(raw_value) > 10000:
             return JsonResponse({'valid': False, 'error': 'Please enter an answer of up to 10,000 characters.'}, status=400)
 
-        # Check if typed input is English-only
-        if value:
+        # Check if typed input is English-only (ONLY for strictly validated questions)
+        VALIDATED_QUESTION_IDS = {2, 3, 8, 13, 22, 23}
+        if value and q['id'] in VALIDATED_QUESTION_IDS:
             is_option_q = q['type'] in ['options', 'options_or_text']
             is_valid_translated_option = False
             if is_option_q:
@@ -964,29 +965,26 @@ def submit_answer(request):
                     is_valid_translated_option = True
                     
             if not is_valid_translated_option:
-                # Bypass English-only check for cover_note if Hindi is selected
-                is_cover_note_hindi = (q['id'] == 18 and lang == 'hi')
-                if not is_cover_note_hindi:
-                    english_pattern = re.compile(r'^[\sA-Za-z0-9!"#$%&\'()*+,\-./:;<=>?@\[\\\]^_`{|}~\u2010-\u201f\u2026\u2022\u20B9\u20A8\xA3\u20AC]*$')
-                    if not english_pattern.match(value):
-                        error_msg = "Please enter your response in English only."
-                        if not addendum_text and lang != 'en':
-                            lang_data = TRANSLATIONS.get(lang, {})
-                            error_msg = lang_data.get('errors', {}).get('english_only', error_msg)
-                        error_media = resolve_media(lang, 'invalid_input')
-                        error_video_url = error_media['url'] if error_media else None
-                        hint_text = get_question_hint(q['id'], lang)
+                english_pattern = re.compile(r'^[\sA-Za-z0-9!"#$%&\'()*+,\-./:;<=>?@\[\\\]^_`{|}~\u2010-\u201f\u2026\u2022\u20B9\u20A8\xA3\u20AC]*$')
+                if not english_pattern.match(value):
+                    error_msg = "Please enter your response in English only."
+                    if not addendum_text and lang != 'en':
+                        lang_data = TRANSLATIONS.get(lang, {})
+                        error_msg = lang_data.get('errors', {}).get('english_only', error_msg)
+                    error_media = resolve_media(lang, 'invalid_input')
+                    error_video_url = error_media['url'] if error_media else None
+                    hint_text = get_question_hint(q['id'], lang)
 
-                        return JsonResponse({
-                            'valid': False,
-                            'reason': 'invalid',
-                            'error': error_msg,
-                            'error_text': error_msg,
-                            'error_video_url': error_video_url,
-                            'error_video': error_video_url,
-                            'idle_video': resolve_idle_media(lang),
-                            'hint': hint_text
-                        })
+                    return JsonResponse({
+                        'valid': False,
+                        'reason': 'invalid',
+                        'error': error_msg,
+                        'error_text': error_msg,
+                        'error_video_url': error_video_url,
+                        'error_video': error_video_url,
+                        'idle_video': resolve_idle_media(lang),
+                        'hint': hint_text
+                    })
             
         # Option mapping & numeric/email normalization
         is_option_q = q['type'] in ['options', 'options_or_text']
@@ -1028,7 +1026,7 @@ def submit_answer(request):
             else:
                 reason = 'invalid'
         if is_valid:
-            value_english = error_msg if error_msg else value_english
+            value_english = (error_msg if error_msg else value_english).strip()[:2000]
             invalid_attempts = request.session.get('invalid_attempts', {})
             if str(q['id']) in invalid_attempts:
                 invalid_attempts.pop(str(q['id']), None)
@@ -1066,7 +1064,7 @@ def submit_answer(request):
             else:
                 error_media = resolve_error_media(lang, q.get('key', ''), reason=reason, legacy_error_video=q.get('error_video', ''))
             error_video_url = error_media['url'] if error_media else None
-            hint_text = get_question_hint(q['id'], lang)
+            hint_text = get_question_hint(q['id'], lang) if q['id'] in VALIDATED_QUESTION_IDS else ''
 
             if attempts_left <= 0:
                 logger.warning('Question %s failed %s validation attempts; skipping question without saving.', q['id'], MAX_INVALID_ATTEMPTS)

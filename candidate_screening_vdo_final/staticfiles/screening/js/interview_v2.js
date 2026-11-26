@@ -901,8 +901,13 @@ async function handleAnswerFailure(item) {
   const errVideo = data.error_video_url || data.error_video;
   const qHint = data.hint || answeringQuestion.hint || QUESTION_HINTS[answeringQuestion.id] || 'Please enter a valid response.';
 
-  // Show the hint box at the moment invalid video starts (or immediately if video is missing)
-  showHintBox(qHint);
+  // Show the hint box only for the 6 strictly validated questions on invalid reason
+  const STRICTLY_VALIDATED_QIDS = [2, 3, 8, 13, 22, 23];
+  if (data.reason === 'invalid' && STRICTLY_VALIDATED_QIDS.includes(answeringQuestion.id)) {
+    showHintBox(qHint);
+  } else {
+    hideHintBox();
+  }
 
   try {
     if (errVideo) {
@@ -968,11 +973,11 @@ async function handleSubmit() {
     value = inpText.value.trim();
   }
 
-  // Client-side English-only validation for typed inputs
-  const isTyped = (qtype !== 'options' && qtype !== 'options_or_text') || (qtype === 'options_or_text' && selectedOption === '__custom__');
-  if (isTyped && value && !isEnglishOnly(value)) {
-    const isCoverNoteHindi = (currentQuestion?.id === 18 && selectedLanguage === 'hi');
-    if (!isCoverNoteHindi) {
+  // Client-side English-only validation for typed inputs (strictly validated questions only)
+  const STRICTLY_VALIDATED_QIDS = [2, 3, 8, 13, 22, 23];
+  if (STRICTLY_VALIDATED_QIDS.includes(currentQuestion?.id)) {
+    const isTyped = (qtype !== 'options' && qtype !== 'options_or_text') || (qtype === 'options_or_text' && selectedOption === '__custom__');
+    if (isTyped && value && !isEnglishOnly(value)) {
       showError(localizedEnglishOnlyError);
       lockInput(false);
       isLocked = false;

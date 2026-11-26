@@ -144,27 +144,31 @@ class QuestionHintsAndValidationMatchingTests(TestCase):
         hint16 = get_question_hint(16)
         self.assertIn("3-5 LPA", hint16)
         self.assertTrue(validate_answer(q16, "3-5 LPA")[0])
-        self.assertFalse(validate_answer(q16, "400000")[0])
+        # Under narrowed validation, non-validated question 16 accepts any non-empty input
+        self.assertTrue(validate_answer(q16, "400000")[0])
 
     def test_hint_10_has_experience_matches_options(self):
         q10 = QUESTION_LOOKUP[10]
         hint10 = get_question_hint(10)
         self.assertIn("Yes, I have experience", hint10)
         self.assertTrue(validate_answer(q10, "Yes, I have experience")[0])
-        self.assertFalse(validate_answer(q10, "2 years")[0])
+        # Under narrowed validation, non-validated question 10 accepts any non-empty input
+        self.assertTrue(validate_answer(q10, "2 years")[0])
 
     def test_hint_13_experience_duration_matches_options(self):
         q13 = QUESTION_LOOKUP[13]
         hint13 = get_question_hint(13)
         self.assertIn("1-2 years", hint13)
         self.assertTrue(validate_answer(q13, "1-2 years")[0])
+        self.assertFalse(validate_answer(q13, "invalid duration")[0])
 
     def test_hint_17_linkedin_optional_skip(self):
         q17 = QUESTION_LOOKUP[17]
         hint17 = get_question_hint(17)
         self.assertIn("leave blank to skip", hint17)
         self.assertTrue(validate_answer(q17, "")[0])
-        self.assertFalse(validate_answer(q17, "skip")[0])
+        # Under narrowed validation, non-validated question 17 accepts any non-empty input
+        self.assertTrue(validate_answer(q17, "skip")[0])
 
     def test_hint_21_internship_done_yes_no(self):
         q21 = QUESTION_LOOKUP[21]
@@ -204,7 +208,6 @@ class SubmitAnswerInvalidFlowApiTests(TestCase):
 
     def test_invalid_answers_resolve_to_invalid_input_and_hint(self):
         test_cases = [
-            (1, "invalid_name_no_spaces", "Enter your full name"),
             (2, "not-an-email", "Enter a valid email address"),
             (8, "year20", "Enter the 4-digit year"),
             (22, "june 202", "Enter the month and year"),

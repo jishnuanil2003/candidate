@@ -98,9 +98,8 @@ class SubmitAnswerTest(TestCase):
         response = submit_answer(request)
         self.assertEqual(response.status_code, 200)
         res_data = json.loads(response.content)
-        # Under new rule, custom typed non-English inputs are rejected
-        self.assertFalse(res_data['valid'])
-        self.assertIn("ഇംഗ്ലീഷിൽ മാത്രം", res_data['error']) # Localized Malayalam error for english_only
+        # Under narrowed validation, non-validated questions accept typed non-English inputs
+        self.assertTrue(res_data['valid'])
         mock_translate.assert_not_called()
 
     @patch('screening.views.translate_number_via_groq')
@@ -172,9 +171,8 @@ class SubmitAnswerTest(TestCase):
         
         self.assertEqual(response.status_code, 200)
         res_data = json.loads(response.content)
-        # Regional characters in name are rejected
-        self.assertFalse(res_data['valid'])
-        self.assertIn("ഇംഗ്ലീഷിൽ മാത്രം", res_data['error'])
+        # Regional characters in name are accepted without rejection
+        self.assertTrue(res_data['valid'])
         mock_translate.assert_not_called()
 
     def test_clean_transcribed_email(self):

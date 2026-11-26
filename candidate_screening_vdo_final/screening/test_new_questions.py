@@ -64,12 +64,11 @@ class NewQuestionsValidatorTests(SimpleTestCase):
         self.assertFalse(res_filler[0])
         self.assertEqual(getattr(res_filler, 'reason'), 'empty')
 
+        # Under narrowed validation, any non-empty input is accepted
         res_num = validate_lead_source("123456")
-        self.assertFalse(res_num[0])
-        self.assertEqual(getattr(res_num, 'reason'), 'invalid')
+        self.assertTrue(res_num[0])
         res_short = validate_lead_source("a")
-        self.assertFalse(res_short[0])
-        self.assertEqual(getattr(res_short, 'reason'), 'invalid')
+        self.assertTrue(res_short[0])
 
     def test_q20_location_valid_and_invalid(self):
         # Valid locations: 2-60 chars, mostly letters
@@ -78,14 +77,16 @@ class NewQuestionsValidatorTests(SimpleTestCase):
         self.assertTrue(validate_location("Kochi, Kerala")[0])
         self.assertEqual(validate_location("Bengaluru")[1], "Bengaluru")
 
-        # Invalid cases: numbers, phone number, too short, too long, symbols only
+        # Empty is rejected
         self.assertFalse(validate_location("")[0])
-        self.assertFalse(validate_location("A")[0])
-        self.assertFalse(validate_location("9876543210")[0])
-        self.assertFalse(validate_location("+91 9876543210")[0])
-        self.assertFalse(validate_location("12345")[0])
-        self.assertFalse(validate_location("A" * 65)[0])
-        self.assertFalse(validate_location("---...###")[0])
+
+        # Under narrowed validation, any non-empty input is accepted
+        self.assertTrue(validate_location("A")[0])
+        self.assertTrue(validate_location("9876543210")[0])
+        self.assertTrue(validate_location("+91 9876543210")[0])
+        self.assertTrue(validate_location("12345")[0])
+        self.assertTrue(validate_location("A" * 65)[0])
+        self.assertTrue(validate_location("---...###")[0])
 
     def test_q21_internship_done_synonyms_all_languages(self):
         # English
@@ -106,10 +107,11 @@ class NewQuestionsValidatorTests(SimpleTestCase):
         self.assertEqual(validate_internship_done("అవును")[1], "Yes")
         self.assertEqual(validate_internship_done("లేదు")[1], "No")
 
-        # Invalid answers
-        self.assertFalse(validate_internship_done("maybe")[0])
+        # Empty is rejected
         self.assertFalse(validate_internship_done("")[0])
-        self.assertFalse(validate_internship_done("random text")[0])
+        # Under narrowed validation, any non-empty answer is accepted
+        self.assertTrue(validate_internship_done("maybe")[0])
+        self.assertTrue(validate_internship_done("random text")[0])
 
     def test_q22_internship_start_date_multilingual_and_limits(self):
         # Standard English dates
@@ -176,23 +178,21 @@ class NewQuestionsValidatorTests(SimpleTestCase):
         self.assertTrue(validate_internship_end_date("June 2025", answers=answers)[0])
 
     def test_q24_internship_topic_valid_and_invalid(self):
-        # Valid topic (at least 8 chars with letters)
+        # Empty is rejected
+        self.assertFalse(validate_internship_topic("")[0])
+
+        # Under narrowed validation, any non-empty input is accepted
         self.assertTrue(validate_internship_topic("Backend API development in Django")[0])
         self.assertTrue(validate_internship_topic("Machine Learning for Healthcare")[0])
         self.assertTrue(validate_internship_topic("Robotics")[0])
-
-        # Invalid: < 8 chars
-        self.assertFalse(validate_internship_topic("Python")[0])
-        self.assertFalse(validate_internship_topic("Django")[0])
-
-        # Invalid: no letters (digits/symbols only)
-        self.assertFalse(validate_internship_topic("1234567890")[0])
-
-        # Invalid: repeated words (e.g. "python python python")
-        self.assertFalse(validate_internship_topic("python python python")[0])
-        self.assertFalse(validate_internship_topic("test test test test")[0])
-        self.assertFalse(validate_internship_topic("work work work")[0])
-        self.assertFalse(validate_internship_topic("asdasdasd")[0])
+        self.assertTrue(validate_internship_topic("Python")[0])
+        self.assertTrue(validate_internship_topic("Django")[0])
+        self.assertTrue(validate_internship_topic("1234567890")[0])
+        self.assertTrue(validate_internship_topic("python python python")[0])
+        self.assertTrue(validate_internship_topic("test test test test")[0])
+        self.assertTrue(validate_internship_topic("work work work")[0])
+        self.assertTrue(validate_internship_topic("asdasdasd")[0])
+        self.assertTrue(validate_internship_topic("x")[0])
 
 
 class ConditionalInternshipSkipTests(SimpleTestCase):
@@ -267,14 +267,14 @@ class ErrorFlowAndAttemptsTests(SimpleTestCase):
         session = TestSession()
         session['token_interview'] = True
         session['dmcore_token'] = 'sample-token'
-        session['dmcore_play_list'] = [{'question_id': 20, 'field_key': 'location'}]
+        session['dmcore_play_list'] = [{'question_id': 22, 'field_key': 'internship_start_date'}]
         session['interview_language'] = 'en'
         session['answers'] = {}
         session['q_index'] = 0
 
-        # Attempt 1: Invalid answer (digits only)
+        # Attempt 1: Invalid answer (not a valid date)
         req1 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': '12345'}),
+                                 json.dumps({'question_id': 22, 'value': 'bad_date_one'}),
                                  content_type='application/json')
         req1.session = session
         resp1 = json.loads(submit_answer(req1).content)
@@ -286,7 +286,7 @@ class ErrorFlowAndAttemptsTests(SimpleTestCase):
 
         # Attempt 2: Another invalid answer
         req2 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': '9876543210'}),
+                                 json.dumps({'question_id': 22, 'value': 'bad_date_two'}),
                                  content_type='application/json')
         req2.session = session
         resp2 = json.loads(submit_answer(req2).content)
@@ -298,7 +298,7 @@ class ErrorFlowAndAttemptsTests(SimpleTestCase):
 
         # Attempt 3: Third failure skips the question
         req3 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': 'X'}),
+                                 json.dumps({'question_id': 22, 'value': 'bad_date_three'}),
                                  content_type='application/json')
         req3.session = session
         resp3 = json.loads(submit_answer(req3).content)
@@ -336,36 +336,36 @@ class ErrorFlowAndAttemptsTests(SimpleTestCase):
         session = TestSession()
         session['token_interview'] = True
         session['dmcore_token'] = 'sample-token'
-        session['dmcore_play_list'] = [{'question_id': 20, 'field_key': 'location'}]
+        session['dmcore_play_list'] = [{'question_id': 22, 'field_key': 'internship_start_date'}]
         session['interview_language'] = 'en'
         session['answers'] = {}
         session['q_index'] = 0
 
         # Attempt 1: Empty answer returns reason='empty'
         req1 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': '   '}),
+                                 json.dumps({'question_id': 22, 'value': '   '}),
                                  content_type='application/json')
         req1.session = session
         resp1 = json.loads(submit_answer(req1).content)
         self.assertFalse(resp1['valid'])
         self.assertEqual(resp1['reason'], 'empty')
         self.assertEqual(resp1['attempts_left'], 2)
-        self.assertEqual(resp1['error_text'], "I still need your current location. Which city or town do you live in?")
+        self.assertEqual(resp1['error_text'], "When did your internship begin? The month and year is enough.")
 
         # Attempt 2: Invalid answer returns reason='invalid'
         req2 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': '12345'}),
+                                 json.dumps({'question_id': 22, 'value': '12345'}),
                                  content_type='application/json')
         req2.session = session
         resp2 = json.loads(submit_answer(req2).content)
         self.assertFalse(resp2['valid'])
         self.assertEqual(resp2['reason'], 'invalid')
         self.assertEqual(resp2['attempts_left'], 1)
-        self.assertEqual(resp2['error_text'], "I couldn't recognise that place. Could you tell me the name of your city or town again?")
+        self.assertIn("That date doesn't look right", resp2['error_text'])
 
         # Attempt 3: Filler word returns reason='empty' and triggers skip
         req3 = self.factory.post('/api/answer/',
-                                 json.dumps({'question_id': 20, 'value': 'um uh'}),
+                                 json.dumps({'question_id': 22, 'value': 'um uh'}),
                                  content_type='application/json')
         req3.session = session
         resp3 = json.loads(submit_answer(req3).content)
