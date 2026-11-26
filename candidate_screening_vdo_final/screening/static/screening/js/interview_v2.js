@@ -578,12 +578,8 @@ async function displayQuestion(data) {
   hideHintBox();
   hideError();
 
-  if (data.next_question) {
-    nextQuestionData = data.next_question;
-  }
-  if (data.conditional_next) {
-    conditionalNextMap = data.conditional_next;
-  }
+  nextQuestionData = data.next_question || null;
+  conditionalNextMap = data.conditional_next || null;
 
   // Preload only the NEXT question's video into the hidden preload element
   if (nextQuestionData && nextQuestionData.question_video) {
@@ -804,15 +800,22 @@ async function processAnswerQueue() {
       } else if (data.progress !== undefined && data.progress !== null) {
         updateProgressUI(null, null, data.progress);
       }
-      if (data.next_question) {
-        nextQuestionData = data.next_question;
-        if (nextQuestionData.question_video) {
-          videoEngine.preloadNext(nextQuestionData.question_video);
-        }
+
+      if (data.done) {
+        const idx = answerQueue.indexOf(item);
+        if (idx !== -1) answerQueue.splice(idx, 1);
+        isProcessingQueue = false;
+        isLocked = false;
+        isSubmitting = false;
+        await handleCompletion(data.outro_video || data.completion_video, data.ui);
+        return;
       }
-      if (data.conditional_next) {
-        conditionalNextMap = data.conditional_next;
+
+      nextQuestionData = data.next_question || null;
+      if (nextQuestionData && nextQuestionData.question_video) {
+        videoEngine.preloadNext(nextQuestionData.question_video);
       }
+      conditionalNextMap = data.conditional_next || null;
 
       // If optimistic advancement was done:
       if (item.optimisticTarget) {
@@ -1053,6 +1056,17 @@ async function handleSubmit() {
     }
   }
 
+  // If targetNext is self, or if current question is the last question, do not advance optimistically
+  if (targetNext && targetNext.id === answeringQuestion.id) {
+    targetNext = null;
+  }
+  if (!nextQuestionData && !conditionalNextMap) {
+    targetNext = null;
+  }
+  if (currentQTotal > 0 && answeringQuestion.number >= currentQTotal) {
+    targetNext = null;
+  }
+
   // Play next question IMMEDIATELY as answer is accepted locally
   if (targetNext) {
     queueItem.optimisticTarget = targetNext;
@@ -1122,90 +1136,107 @@ async function handleCompletion(outroVideoSrc, ui) {
     setProgress(100);
   }
 
-  // Block "complete" until every queued answer has been confirmed:
-  const completePromise = (async () => {
-    while (answerQueue.some(i => i.status === 'pending' || i.status === 'sending')) {
-      await sleep(100);
-    }
-    if (answerQueue.some(i => i.status === 'failed')) {
-      return { success: false, error: 'Could not save all interview answers.' };
-    }
-    try {
-      const res = await api('/api/complete/', {});
-      return await res.json();
-    } catch (e) {
-      console.error('Completion error:', e);
-      return { success: false, error: 'Connection error' };
-    }
-  })();
-
-  if (outroVideoSrc) {
-    // Play the chosen language's outro.mp4 once, with sound, on the final screen
-    videoEngine.playQuestion(outroVideoSrc, null, false);
-
-    const waitMs = await getVideoWaitTime(outroVideoSrc);
-    await new Promise(resolve => {
-      let finished = false;
-      const onEnd = () => {
-        if (!finished) {
-          finished = true;
-          videoEngine.elQuestion.removeEventListener('ended', onEnd);
-          resolve();
-        }
-      };
-      videoEngine.elQuestion.addEventListener('ended', onEnd, { once: true });
-      setTimeout(onEnd, Math.max(waitMs, 1000));
-    });
-  } else {
-    // If the chosen language has no outro.mp4: play NO video, show thank-you text, log warning
-    console.warn(`No outro video found for language ${selectedLanguage}; showing thank-you text only.`);
-  }
-
-  videoEngine.stopAll();
-  setSpeakingOverlay(false);
-
-  // Wait for background completion call (which waited for all queued answers to be confirmed)
-  let data = {};
   try {
-    data = await completePromise;
-  } catch (e) {
-    console.error('Completion error:', e);
-  }
-
-  if (data && data.success) {
-    csMeta.replaceChildren();
-    if (data.application_id !== undefined) {
-      const row = document.createElement('div');
-      row.className = 'cs-meta-row';
-      const label = document.createElement('span');
-      label.textContent = 'Application ID';
-      const value = document.createElement('strong');
-      value.textContent = `#${data.application_id}`;
-      row.append(label, value);
-      csMeta.appendChild(row);
-    }
-    const statusRow = document.createElement('div');
-    statusRow.className = 'cs-meta-row';
-    const statusLabel = document.createElement('span');
-    statusLabel.textContent = 'Status';
-    const statusValue = document.createElement('strong');
-    statusValue.style.color = 'var(--green)';
-    statusValue.textContent = 'Submitted ✓';
-    statusRow.append(statusLabel, statusValue);
-    csMeta.appendChild(statusRow);
-
-    if (ui && ui.thank_you) {
-      const csThankYou = document.getElementById('csThankYou');
-      if (csThankYou) csThankYou.textContent = ui.thank_you;
+    // 1. Block "complete" until every queued answer has been confirmed
+    while (answerQueue.some(i => i.status === 'pending' || i.status === 'sending')) {
+      await sleep(50);
     }
 
-    completionScreen.style.display = 'flex';
-  } else {
-    // If completion fails after its retries, show the existing error message after the outro
-    completionHandled = false;
-    if (inputArea) inputArea.style.display = 'block';
-    showError((data && data.error) || 'Failed to submit interview. Please try again or contact the recruiter.');
-    lockInput(false);
+    // 2. Play outro video if available (with fallback / timeout so UI never hangs)
+    if (outroVideoSrc) {
+      try {
+        videoEngine.playQuestion(outroVideoSrc, null, false);
+
+        const waitMs = await getVideoWaitTime(outroVideoSrc);
+        await new Promise(resolve => {
+          let finished = false;
+          const onEnd = () => {
+            if (!finished) {
+              finished = true;
+              if (videoEngine && videoEngine.elQuestion) {
+                videoEngine.elQuestion.removeEventListener('ended', onEnd);
+                videoEngine.elQuestion.removeEventListener('error', onEnd);
+              }
+              resolve();
+            }
+          };
+          if (videoEngine && videoEngine.elQuestion) {
+            videoEngine.elQuestion.addEventListener('ended', onEnd, { once: true });
+            videoEngine.elQuestion.addEventListener('error', onEnd, { once: true });
+          }
+          setTimeout(onEnd, Math.max(waitMs, 1000));
+        });
+      } catch (videoErr) {
+        console.warn('Outro video playback failed; proceeding to completion:', videoErr);
+      }
+    } else {
+      console.warn(`No outro video found for language ${selectedLanguage}; showing thank-you text only.`);
+    }
+
+    if (videoEngine) videoEngine.stopAll();
+    setSpeakingOverlay(false);
+
+    // 3. Call the complete endpoint with retry
+    let data = null;
+    if (answerQueue.some(i => i.status === 'failed')) {
+      data = { success: false, error: 'Could not save all interview answers.' };
+    } else {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await api('/api/complete/', {});
+          data = await res.json();
+          if (data && data.success) break;
+          if (attempt < 2) await sleep(500);
+        } catch (e) {
+          console.error(`Completion call attempt ${attempt + 1} failed:`, e);
+          if (attempt < 2) await sleep(500);
+        }
+      }
+    }
+
+    // 4. Show completion screen
+    if (data && data.success) {
+      csMeta.replaceChildren();
+      if (data.application_id !== undefined) {
+        const row = document.createElement('div');
+        row.className = 'cs-meta-row';
+        const label = document.createElement('span');
+        label.textContent = 'Application ID';
+        const value = document.createElement('strong');
+        value.textContent = `#${data.application_id}`;
+        row.append(label, value);
+        csMeta.appendChild(row);
+      }
+      const statusRow = document.createElement('div');
+      statusRow.className = 'cs-meta-row';
+      const statusLabel = document.createElement('span');
+      statusLabel.textContent = 'Status';
+      const statusValue = document.createElement('strong');
+      statusValue.style.color = 'var(--green)';
+      statusValue.textContent = 'Submitted ✓';
+      statusRow.append(statusLabel, statusValue);
+      csMeta.appendChild(statusRow);
+
+      if (ui && ui.thank_you) {
+        const csThankYou = document.getElementById('csThankYou');
+        if (csThankYou) csThankYou.textContent = ui.thank_you;
+      }
+
+      completionScreen.style.display = 'flex';
+    } else {
+      completionHandled = false;
+      if (inputArea) inputArea.style.display = 'block';
+      showError((data && data.error) || 'Failed to submit interview. Please try again or contact the recruiter.');
+      lockInput(false);
+    }
+  } catch (err) {
+    console.error('Unexpected error during handleCompletion:', err);
+    if (completionScreen) {
+      completionScreen.style.display = 'flex';
+    }
+  } finally {
+    if (videoEngine) videoEngine.stopAll();
+    setSpeakingOverlay(false);
   }
 }
 

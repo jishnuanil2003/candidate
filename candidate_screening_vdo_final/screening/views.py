@@ -624,8 +624,12 @@ def interview(request):
     request.session.modified = True
 
     total = len(active_qs)
-    curr_num = min(q_index + 1, total) if total else 1
-    init_pct = int(((curr_num - 1) / total) * 100) if total else 0
+    if q_index >= total:
+        curr_num = total
+        init_pct = 100
+    else:
+        curr_num = min(q_index + 1, total) if total else 1
+        init_pct = int(((curr_num - 1) / total) * 100) if total else 0
 
     return render(request, 'screening/interview.html', {
         'total_questions': total,
@@ -1287,6 +1291,9 @@ def transcribe_audio(request):
 @require_http_methods(['POST'])
 def complete_application(request):
     try:
+        if request.session.get('interview_finished', False):
+            return JsonResponse({'success': True})
+
         if request.session.get('token_interview', False):
             play_list = get_dmcore_active_questions(request.session.get('dmcore_play_list', []), request.session.get('answers', {}))
             if not play_list or request.session.get('q_index', 0) < len(play_list):
@@ -1319,6 +1326,11 @@ def complete_application(request):
                         request.session.modified = True
                         break
                     except DmcoreError as error:
+                        if error.status in (400, 409) or 'already' in str(error).lower() or 'completed' in str(error).lower():
+                            logger.info('DMCore indicates interview already completed: %s', error)
+                            request.session['interview_finished'] = True
+                            request.session.modified = True
+                            break
                         if attempt == 2:
                             logger.error('DMCore interview completion failed after retries (category=%s, HTTP %s): %s', error.kind, error.status, error)
                             return JsonResponse({'error': _dmcore_public_error(error)}, status=503)
